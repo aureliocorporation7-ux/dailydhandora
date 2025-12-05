@@ -3,89 +3,139 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const admin = require("firebase-admin");
 require('dotenv').config();
 
-// --- 🔐 YAHAN HUMNE CHANGE KIYA HAI (Base64 Decode) ---
-// GitHub se "Encoded" string milegi, hum use wapas JSON bana rahe hain
-// Taaki "Unexpected end of JSON" wala error kabhi na aaye.
-const serviceAccount = JSON.parse(
-  Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT, 'base64').toString('utf8')
-);
-// -----------------------------------------------------
+console.log("🛠️ Starting Bot Initialization...");
+
+// --- 🔐 ULTIMATE KEY LOADER (हर मर्ज की दवा) ---
+function getFirebaseCredentials() {
+  const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT;
+
+  // 1. Check: Kya Secret exist karta hai?
+  if (!rawKey) {
+    throw new Error("❌ FATAL: 'FIREBASE_SERVICE_ACCOUNT' secret GitHub me missing hai ya empty hai.");
+  }
+
+  // 2. Safai: Extra spaces ya new lines hatana
+  const cleanKey = rawKey.trim();
+  
+  // Debugging: Bina secret dikhaye check karna ki kya aa raha hai
+  console.log(`🔑 Key detected! Length: ${cleanKey.length} chars.`);
+  console.log(`👀 Key starts with: "${cleanKey.substring(0, 5)}..."`); 
+
+  let serviceAccount;
+
+  try {
+    // CASE A: Agar key '{' se shuru hoti hai, to ye DIRECT JSON hai
+    if (cleanKey.startsWith('{')) {
+      console.log("ℹ️ Format detected: RAW JSON");
+      serviceAccount = JSON.parse(cleanKey);
+    } 
+    // CASE B: Agar nahi, to ye BASE64 ho sakti hai
+    else {
+      console.log("ℹ️ Format detected: BASE64 (Trying to decode...)");
+      const decoded = Buffer.from(cleanKey, 'base64').toString('utf8');
+      // Decode ke baad check karein ki kya ye JSON bana?
+      if (!decoded.startsWith('{')) {
+        throw new Error("Decoded string JSON nahi lag rahi hai.");
+      }
+      serviceAccount = JSON.parse(decoded);
+    }
+    
+    // Check karein ki kya project_id hai (matlab sahi JSON hai)
+    if (!serviceAccount.project_id) {
+        throw new Error("JSON parse hua, lekin 'project_id' missing hai. Galat file ho sakti hai.");
+    }
+
+    console.log("✅ Firebase Key Successfully Loaded!");
+    return serviceAccount;
+
+  } catch (error) {
+    console.error("\n❌ KEY PARSING ERROR:");
+    console.error("Error Details:", error.message);
+    console.error("💡 TIP: GitHub Secret me jaakar dekho ki key sahi se paste hui hai ya nahi.\n");
+    process.exit(1); // Stop process
+  }
+}
+
+// Credentials load karna
+const serviceAccount = getFirebaseCredentials();
 
 // 1. Firebase Connect
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    console.log("✅ Firebase Connected.");
+} catch (e) {
+    console.error("❌ Firebase Connection Failed:", e.message);
+    process.exit(1);
+}
+
 const db = admin.firestore();
 
 // 2. Gemini Connect
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const geminiKey = process.env.GEMINI_API_KEY;
+if (!geminiKey) {
+    console.error("❌ GEMINI_API_KEY missing hai!");
+    process.exit(1);
+}
+const genAI = new GoogleGenerativeAI(geminiKey);
 
 async function main() {
   try {
-    console.log("🚀 DailyDhandora Super-Bot Starting...");
+    console.log("🚀 DailyDhandora Bot Logic Running...");
 
-    // A. Trend Uthana (Google Trends RSS)
+    // A. Trend Uthana
     const parser = new Parser();
     const feed = await parser.parseURL('https://trends.google.com/trends/trendingsearches/daily/rss?geo=IN');
     
-    // Top 1 trend utha rahe hain
-    const trend = feed.items[0]; 
-    console.log(`🔥 Topic: ${trend.title}`);
+    if (!feed || !feed.items || feed.items.length === 0) {
+        throw new Error("Google Trends se koi data nahi mila.");
+    }
 
-    // Check Duplicate (Agar pehle se hai to dobara mat likho)
+    const trend = feed.items[0]; 
+    console.log(`🔥 Topic Found: ${trend.title}`);
+
+    // Check Duplicate
     const checkDb = await db.collection('articles').where('title', '==', trend.title).get();
     if (!checkDb.empty) {
-      console.log("⚠️ Ye khabar pehle se hai. Skipping.");
+      console.log("⚠️ Article pehle se exist karta hai. Exiting.");
       return;
     }
 
-    // B. Super Article Likhwana (Super Prompt)
-    console.log("🤖 Gemini is writing (Super Mode)...");
+    // B. Gemini se Likhwana
+    console.log("🤖 Gemini writing article...");
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const prompt = `
-      You are an expert journalist for 'DailyDhandora', a viral Indian news site.
+      You are a journalist for 'DailyDhandora'.
       Topic: "${trend.title}"
       Context: "${trend.contentSnippet}"
       
-      Write a High-Quality Blog Post in Hindi (mix English words naturally / Hinglish).
+      Write a viral blog post in Hindi (Hinglish).
+      Requirements: Clickbait Headline, HTML Body (Table/Bullets/FAQs), Category, Tags.
       
-      REQUIREMENTS (To force Google Ranking):
-      1. **Headline:** Clickbait but true (e.g., "Big News: ...", "Janiye sach...").
-      2. **Introduction:** Hook the reader immediately.
-      3. **Key Data Table:** If it's a phone/match/scheme, create a HTML <table> with key specs/scores/dates. If general news, bullet points.
-      4. **FAQs:** Add 3 "Frequently Asked Questions" at the end.
-      5. **Conclusion:** Give a personal opinion or question to the reader.
-      
-      OUTPUT FORMAT: JSON ONLY (No markdown formatting like \`\`\`json).
-      Structure:
-      {
-        "headline": "String",
-        "body": "HTML String (Use <h2>, <p>, <ul>, <li>, <table>, <strong>)",
-        "category": "String (e.g., Tech, Cricket, Astology)",
-        "tags": ["tag1", "tag2"]
-      }
+      OUTPUT: JSON ONLY (No markdown).
+      Schema: { "headline": "", "body": "", "category": "", "tags": [] }
     `;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text().replace(/```json|```/g, "").trim();
     
-    // JSON Parse (Error handling ke saath)
     let articleData;
     try {
         articleData = JSON.parse(text);
     } catch (e) {
-        console.error("Gemini ne galat JSON diya, fixing...", text);
-        // Agar kabhi JSON fail ho, to basic structure bana do taaki bot ruke nahi
+        console.error("⚠️ Gemini output JSON fix kar raha hoon...");
+        // Basic fallback agar JSON toot jaye
         articleData = {
-            headline: `Breaking: ${trend.title}`,
-            body: `<p>${trend.contentSnippet}</p><p>(Read more on official news sources)</p>`,
-            category: "General",
-            tags: ["News"]
+            headline: `Trending: ${trend.title}`,
+            body: `<p>${trend.contentSnippet}</p>`,
+            category: "News",
+            tags: ["Viral"]
         };
     }
 
-    // C. Firebase Save
+    // C. Save to Firebase
     await db.collection('articles').add({
       title: trend.title,
       headline: articleData.headline,
@@ -93,15 +143,14 @@ async function main() {
       tags: articleData.tags,
       category: articleData.category,
       originalLink: trend.link,
-      // Image ka jugad (Storage free rakhne ke liye)
       imageUrl: trend.enclosure ? trend.enclosure.url : "https://source.unsplash.com/random/800x600/?news",
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log("✅ Article Published Successfully on DailyDhandora!");
+    console.log("✅ Success! Article Published.");
 
   } catch (error) {
-    console.error("❌ Error:", error);
+    console.error("❌ Runtime Error:", error);
     process.exit(1);
   }
 }
