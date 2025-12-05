@@ -1,11 +1,17 @@
-// trend-bot.js
 const Parser = require('rss-parser');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const admin = require("firebase-admin");
 require('dotenv').config();
 
+// --- 🔐 YAHAN HUMNE CHANGE KIYA HAI (Base64 Decode) ---
+// GitHub se "Encoded" string milegi, hum use wapas JSON bana rahe hain
+// Taaki "Unexpected end of JSON" wala error kabhi na aaye.
+const serviceAccount = JSON.parse(
+  Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT, 'base64').toString('utf8')
+);
+// -----------------------------------------------------
+
 // 1. Firebase Connect
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
@@ -18,20 +24,22 @@ async function main() {
   try {
     console.log("🚀 DailyDhandora Super-Bot Starting...");
 
-    // A. Trend Uthana
+    // A. Trend Uthana (Google Trends RSS)
     const parser = new Parser();
     const feed = await parser.parseURL('https://trends.google.com/trends/trendingsearches/daily/rss?geo=IN');
-    const trend = feed.items[0]; // Top 1 trend
+    
+    // Top 1 trend utha rahe hain
+    const trend = feed.items[0]; 
     console.log(`🔥 Topic: ${trend.title}`);
 
-    // Check Duplicate
+    // Check Duplicate (Agar pehle se hai to dobara mat likho)
     const checkDb = await db.collection('articles').where('title', '==', trend.title).get();
     if (!checkDb.empty) {
       console.log("⚠️ Ye khabar pehle se hai. Skipping.");
       return;
     }
 
-    // B. Super Article Likhwana (Updated Prompt)
+    // B. Super Article Likhwana (Super Prompt)
     console.log("🤖 Gemini is writing (Super Mode)...");
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
@@ -40,16 +48,16 @@ async function main() {
       Topic: "${trend.title}"
       Context: "${trend.contentSnippet}"
       
-      Write a High-Quality Blog Post in Hindi (mix English words naturally).
+      Write a High-Quality Blog Post in Hindi (mix English words naturally / Hinglish).
       
       REQUIREMENTS (To force Google Ranking):
-      1. **Headline:** Clickbait but true (e.g., "Big News: ...").
+      1. **Headline:** Clickbait but true (e.g., "Big News: ...", "Janiye sach...").
       2. **Introduction:** Hook the reader immediately.
       3. **Key Data Table:** If it's a phone/match/scheme, create a HTML <table> with key specs/scores/dates. If general news, bullet points.
       4. **FAQs:** Add 3 "Frequently Asked Questions" at the end.
       5. **Conclusion:** Give a personal opinion or question to the reader.
       
-      OUTPUT FORMAT: JSON ONLY (No markdown formatting).
+      OUTPUT FORMAT: JSON ONLY (No markdown formatting like \`\`\`json).
       Structure:
       {
         "headline": "String",
@@ -61,7 +69,21 @@ async function main() {
 
     const result = await model.generateContent(prompt);
     const text = result.response.text().replace(/```json|```/g, "").trim();
-    const articleData = JSON.parse(text);
+    
+    // JSON Parse (Error handling ke saath)
+    let articleData;
+    try {
+        articleData = JSON.parse(text);
+    } catch (e) {
+        console.error("Gemini ne galat JSON diya, fixing...", text);
+        // Agar kabhi JSON fail ho, to basic structure bana do taaki bot ruke nahi
+        articleData = {
+            headline: `Breaking: ${trend.title}`,
+            body: `<p>${trend.contentSnippet}</p><p>(Read more on official news sources)</p>`,
+            category: "General",
+            tags: ["News"]
+        };
+    }
 
     // C. Firebase Save
     await db.collection('articles').add({
@@ -71,11 +93,12 @@ async function main() {
       tags: articleData.tags,
       category: articleData.category,
       originalLink: trend.link,
-      imageUrl: trend.enclosure ? trend.enclosure.url : null,
+      // Image ka jugad (Storage free rakhne ke liye)
+      imageUrl: trend.enclosure ? trend.enclosure.url : "https://source.unsplash.com/random/800x600/?news",
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log("✅ Article Published Successfully!");
+    console.log("✅ Article Published Successfully on DailyDhandora!");
 
   } catch (error) {
     console.error("❌ Error:", error);
