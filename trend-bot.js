@@ -1,3 +1,4 @@
+// VERSION 2.0 - ULTIMATE FIX
 const Parser = require('rss-parser');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const admin = require("firebase-admin");
