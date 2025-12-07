@@ -1,34 +1,24 @@
 {
   "name": "dailydhandora",
   "version": "1.0.0",
-  "description": "Zero-cost automated Hindi news blog",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "bot": "node scripts/run-bot.js",
-    "bot:status": "node scripts/check-rate-limit-status.js",
-    "bot:reset": "node scripts/reset-rate-limits.js",
-    "db:clear": "node scripts/clear-db.js"
+    "lint": "next lint",
+    "bot": "node scripts/run-bot.js"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "dotenv": "^17.2.3",
-    "firebase": "^12.6.0",
-    "firebase-admin": "^12.7.0",
-    "lucide-react": "^0.556.0",
-    "next": "^14.2.33",
+    "next": "^14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "rss-parser": "^3.13.0"
+    "firebase-admin": "^12.1.1",
+    "@google/generative-ai": "^0.21.0",
+    "rss-parser": "^3.13.0",
+    "axios": "^1.7.2",
+    "groq-sdk": "^0.5.0"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.15",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.15"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "dotenv": "^17.2.3"
   }
 }

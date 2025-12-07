@@ -1,3 +1,11 @@
+// Load environment variables
+if (process.env.CI) {
+  require('dotenv').config({ path: '.env' });
+} else {
+  require('dotenv').config({ path: '.env.local' });
+}
+
+
 require('dotenv').config({ path: '.env.local' });
 const Parser = require('rss-parser');
 const { FieldValue } = require('firebase-admin/firestore');
