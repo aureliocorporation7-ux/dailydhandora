@@ -28,6 +28,25 @@ module.exports = {
         "xl": "2rem",
         "full": "9999px"
       },
+      typography: ({ theme }) => ({
+        invert: {
+          css: {
+            '--tw-prose-headings': theme('colors.primary'),
+            h1: {
+              color: theme('colors.primary'),
+            },
+            h2: {
+              color: theme('colors.primary'),
+            },
+            h3: {
+              color: theme('colors.primary'),
+            },
+            h4: {
+              color: theme('colors.primary'),
+            },
+          },
+        },
+      }),
     },
   },
   plugins: [

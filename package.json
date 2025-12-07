@@ -9,16 +9,21 @@
     "bot": "node scripts/run-bot.js"
   },
   "dependencies": {
-    "next": "^14.2.5",
+    "@google/generative-ai": "^0.21.0",
+    "axios": "^1.7.2",
+    "firebase": "^12.6.0",
+    "firebase-admin": "^12.7.0",
+    "groq-sdk": "^0.5.0",
+    "next": "^16.0.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "firebase-admin": "^12.1.1",
-    "@google/generative-ai": "^0.21.0",
-    "rss-parser": "^3.13.0",
-    "axios": "^1.7.2",
-    "groq-sdk": "^0.5.0"
+    "rss-parser": "^3.13.0"
   },
   "devDependencies": {
-    "dotenv": "^17.2.3"
+    "@tailwindcss/typography": "^0.5.19",
+    "autoprefixer": "^10.4.22",
+    "dotenv": "^17.2.3",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.1"
   }
 }

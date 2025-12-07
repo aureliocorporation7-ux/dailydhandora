@@ -1,11 +1,3 @@
-// Load environment variables
-if (process.env.CI) {
-  require('dotenv').config({ path: '.env' });
-} else {
-  require('dotenv').config({ path: '.env.local' });
-}
-
-
 require('dotenv').config({ path: '.env.local' });
 const Parser = require('rss-parser');
 const { FieldValue } = require('firebase-admin/firestore');
@@ -271,55 +263,6 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function triggerRevalidation() {
-  const revalidateUrl = 'https://daily-dhandora.vercel.app/api/revalidate';
-  console.log(`\n🔄 Triggering cache revalidation at: ${revalidateUrl}`);
-  
-  try {
-    const response = await fetch(revalidateUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    const responseText = await response.text();
-
-    if (response.ok && responseText) {
-      try {
-        const body = JSON.parse(responseText);
-        if (body.revalidated) {
-          console.log(`✅ Cache revalidated successfully! Timestamp: ${body.timestamp}`);
-        } else {
-          console.log(`⚠️  Revalidation API returned 'false'. Message: ${body.message || 'No message'}`);
-        }
-      } catch (parseError) {
-        console.error('❌ Failed to parse JSON response from revalidation API.');
-        console.error('   Response text:', responseText);
-      }
-    } else if (!response.ok) {
-        console.log(`⚠️  Revalidation request failed with status: ${response.status}`);
-        console.log(`   Response text: ${responseText || '(empty)'}`);
-    } else {
-        console.log('✅ Revalidation request successful, but response body was empty. Cache may still be revalidated.');
-    }
-  } catch (error) {
-    console.error('❌ Critical error during revalidation request:', error.message);
-  }
-}
-
-async function main() {
-  try {
-    await runBot();
-  } catch (error) {
-    console.error('🔥 A critical error occurred in the bot:', error);
-  } finally {
-    await triggerRevalidation();
-    console.log('\n👋 Bot script finished.');
-  }
-}
-
-main().catch(error => {
-  console.error('🔥 Unhandled exception in main execution:', error);
-  process.exit(1);
-});
+runBot().catch(console.error);
 
 module.exports = { getImageWithFallbacks };

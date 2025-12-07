@@ -1,3 +1,6 @@
+export const revalidate = 60; // ISR - revalidate every 60 seconds
+export const dynamic = 'force-dynamic'; // Always fetch fresh data
+
 import { db } from '../lib/firebase';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -82,7 +85,7 @@ export default async function Home() {
                       src={articles[0].imageUrl}
                       alt={articles[0].title}
                       fill
-                      className="object-cover"
+                      className="object-contain md:object-cover"
                       sizes="(max-width: 768px) 100vw, 768px"
                       priority
                     />
@@ -93,7 +96,7 @@ export default async function Home() {
                   )}
                 </div>
                 <div className="flex w-full flex-col items-stretch justify-center gap-2 p-4">
-                  <h2 className="text-white text-xl font-headings font-bold leading-tight line-clamp-3">
+                  <h2 className="text-primary text-xl font-headings font-bold leading-tight line-clamp-3">
                     {articles[0].title}
                   </h2>
                   <p className="text-gray-400 text-sm font-primary font-normal leading-normal line-clamp-2">

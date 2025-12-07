@@ -39,7 +39,7 @@ export default function ArticleCard({ article }) {
             src={article.imageUrl}
             alt={article.title}
             fill
-            className="object-cover"
+            className="object-contain md:object-cover"
             sizes="(max-width: 768px) 50vw, 384px"
           />
         ) : (
@@ -49,7 +49,7 @@ export default function ArticleCard({ article }) {
         )}
       </div>
       <div className="p-3 pt-1">
-        <h3 className="text-white text-base font-headings font-bold leading-tight mb-1 line-clamp-2">
+        <h3 className="text-primary text-base font-headings font-bold leading-tight mb-1 line-clamp-2">
           {article.title}
         </h3>
         <div className="flex justify-between items-center mt-2">
