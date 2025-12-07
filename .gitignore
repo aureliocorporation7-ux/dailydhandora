@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+.rate-limit-state.json
 
 # debug
 npm-debug.log*
