@@ -103,8 +103,7 @@ async function generateAndUploadImage(prompt) {
             parameters: {
                 guidance_scale: 0.0,
                 num_inference_steps: 4,
-            },
-            provider: "fal",
+            }
         });
 
         const buffer = Buffer.from(await result.arrayBuffer());
