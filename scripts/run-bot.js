@@ -103,7 +103,8 @@ async function generateAndUploadImage(prompt) {
             parameters: {
                 guidance_scale: 0.0,
                 num_inference_steps: 4,
-            }
+            },
+            provider: "fal",
         });
 
         const buffer = Buffer.from(await result.arrayBuffer());
@@ -269,7 +270,7 @@ async function main() {
   } catch (error) {
     console.error('🔥 A critical error occurred in the bot:', error);
   } finally {
-    await sleep(60000); // 60-second delay before revalidation
+    await sleep(120000); // 120-second delay before revalidation
     await triggerRevalidation();
     console.log(`
 👋 Bot script finished.`);

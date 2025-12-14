@@ -472,3 +472,17 @@ Details:
 Files Modified:
 - package.json
 Status: Implemented.
+---
+Date: 2025-12-15
+Issue: Hugging Face image generation and revalidation failing in GitHub Actions.
+Solution: Increased the revalidation delay and switched the Hugging Face provider.
+Details:
+1.  **Error Analysis:**
+    *   The Hugging Face image generation was failing with the `nebius` provider.
+    *   The revalidation request was still failing even with a 60-second delay.
+2.  **Correction:**
+    *   Increased the revalidation delay to 120 seconds in `scripts/run-bot.js`.
+    *   Switched the Hugging Face provider to `fal` in `scripts/run-bot.js`.
+Files Modified:
+- scripts/run-bot.js
+Status: Implemented.
