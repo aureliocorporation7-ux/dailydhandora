@@ -448,3 +448,27 @@ Files Modified:
 - app/page.js
 - app/components/ArticleCard.jsx
 Status: Implemented.
+---
+Date: 2025-12-15
+Issue: Revalidation failing in GitHub Actions.
+Solution: Added a delay before triggering revalidation.
+Details:
+1.  **Error Analysis:**
+    *   The revalidation request was failing in the GitHub Actions workflow because it was being triggered before the Vercel deployment had finished.
+2.  **Correction:**
+    *   Added a 60-second delay before the `triggerRevalidation()` call in the `main` function of `scripts/run-bot.js`.
+Files Modified:
+- scripts/run-bot.js
+Status: Implemented.
+---
+Date: 2025-12-15
+Issue: Vercel build warning about Node.js version.
+Solution: Specified a concrete Node.js version in `package.json`.
+Details:
+1.  **Warning:**
+    *   The Vercel build was showing a warning about the `engines` field in `package.json` allowing automatic upgrades to new major Node.js versions.
+2.  **Correction:**
+    *   Added an `engines` field to `package.json` with the `node` version set to `"20.x"` to match the development and GitHub Actions environments.
+Files Modified:
+- package.json
+Status: Implemented.

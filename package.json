@@ -30,5 +30,8 @@
     "dotenv": "^17.2.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.1"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
