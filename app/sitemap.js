@@ -1,22 +1,15 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-
-function getFirebaseAdmin() {
-  if (getApps().length === 0) {
-    let serviceAccount;
-    if (process.env.FIREBASE_SERVICE_KEY_BASE64) {
-      const decoded = Buffer.from(process.env.FIREBASE_SERVICE_KEY_BASE64, 'base64').toString('utf8');
-      serviceAccount = JSON.parse(decoded);
-    } else {
-      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_KEY);
-    }
-    initializeApp({ credential: cert(serviceAccount) });
-  }
-  return getFirestore();
-}
+const { db } = require('../lib/firebase');
 
 export default async function sitemap() {
-  const db = getFirebaseAdmin();
+  if (!db) {
+    console.error("Sitemap generation failed: Firestore not initialized.");
+    return [{
+      url: 'https://dailydhandora.vercel.app',
+      lastModified: new Date(),
+      changeFrequency: 'hourly',
+      priority: 1,
+    }];
+  }
   
   try {
     const snapshot = await db
@@ -53,3 +46,4 @@ export default async function sitemap() {
     ];
   }
 }
+

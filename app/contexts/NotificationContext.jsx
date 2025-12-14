@@ -1,87 +1,106 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
-import { db } from '../../lib/firebase-client';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client'; // ← FIXED: Use client SDK
 
 const NotificationContext = createContext();
-
-export function useNotifications() {
-  const context = useContext(NotificationContext);
-  if (!context) {
-    throw new Error('useNotifications must be used within a NotificationProvider');
-  }
-  return context;
-}
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [lastChecked, setLastChecked] = useState(null);
+  const [lastSeenTimestamp, setLastSeenTimestamp] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // On initial load, get the last checked timestamp from localStorage
+  // Load last seen timestamp from localStorage on mount
   useEffect(() => {
-    const storedTimestamp = localStorage.getItem('lastNotificationCheck');
-    if (storedTimestamp) {
-      setLastChecked(new Timestamp(parseInt(storedTimestamp, 10), 0));
+    if (typeof window === 'undefined') return;
+
+    const stored = localStorage.getItem('lastSeenArticleTimestamp');
+    if (stored) {
+      setLastSeenTimestamp(new Date(stored));
     } else {
-      // If it's the user's first visit, set the timestamp to now.
-      // They won't get a flood of old articles as "new".
-      const now = Timestamp.now();
-      localStorage.setItem('lastNotificationCheck', now.seconds.toString());
-      setLastChecked(now);
+      const now = new Date();
+      setLastSeenTimestamp(now);
+      localStorage.setItem('lastSeenArticleTimestamp', now.toISOString());
     }
+    setIsLoading(false);
   }, []);
 
-  // This is the real-time listener for new articles
+  // Subscribe to real-time article updates
   useEffect(() => {
-    // Don't run the query until we have the lastChecked timestamp from localStorage
-    if (!lastChecked) {
-      return;
-    }
+    if (!lastSeenTimestamp || isLoading) return;
 
     const articlesRef = collection(db, 'articles');
-    // We query for articles created after the user last checked, ordered by creation time
     const q = query(
       articlesRef,
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(20)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newArticles = [];
-      snapshot.forEach(doc => {
-        const article = { id: doc.id, ...doc.data() };
-        // Ensure createdAt is a valid Timestamp object before comparing
-        if (article.createdAt && article.createdAt.seconds > lastChecked.seconds) {
-          newArticles.push(article);
-        }
-      });
-      
-      setNotifications(newArticles);
-      setUnreadCount(newArticles.length);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const articles = [];
+        const lastSeen = lastSeenTimestamp;
 
-    // Cleanup the listener when the component unmounts
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const articleDate = data.createdAt?.toDate();
+
+          if (articleDate && articleDate > lastSeen) {
+            articles.push({
+              id: doc.id,
+              ...data,
+              createdAt: articleDate,
+              isUnread: true,
+            });
+          }
+        });
+
+        setNotifications(articles);
+        setUnreadCount(articles.length);
+      },
+      (error) => {
+        console.error('Notification snapshot error:', error);
+      }
+    );
+
     return () => unsubscribe();
-  }, [lastChecked]);
+  }, [lastSeenTimestamp, isLoading]);
 
   const markAllAsRead = () => {
-    const now = Timestamp.now();
-    localStorage.setItem('lastNotificationCheck', now.seconds.toString());
-    setLastChecked(now);
-    setNotifications([]);
+    if (typeof window === 'undefined') return;
+    const now = new Date();
+    setLastSeenTimestamp(now);
+    localStorage.setItem('lastSeenArticleTimestamp', now.toISOString());
     setUnreadCount(0);
+    setNotifications([]);
   };
 
-  const value = {
-    notifications,
-    unreadCount,
-    markAllAsRead,
+  const markAsRead = (articleId) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== articleId));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
   return (
-    <NotificationContext.Provider value={value}>
+    <NotificationContext.Provider
+      value={{
+        notifications,
+        unreadCount,
+        markAllAsRead,
+        markAsRead,
+      }}
+    >
       {children}
     </NotificationContext.Provider>
   );
+}
+
+export function useNotifications() {
+  const context = useContext(NotificationContext);
+  if (!context) {
+    throw new Error('useNotifications must be used within NotificationProvider');
+  }
+  return context;
 }

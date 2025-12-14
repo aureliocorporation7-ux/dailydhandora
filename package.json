@@ -2,22 +2,27 @@
   "name": "dailydhandora",
   "version": "1.0.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
-    "bot": "node scripts/run-bot.js"
+    "bot": "node scripts/run-bot.js",
+    "cleanup-images": "node scripts/cleanup-images.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
-    "axios": "^1.7.2",
+    "@huggingface/inference": "^4.13.5",
+    "axios": "^1.13.2",
     "firebase": "^12.6.0",
     "firebase-admin": "^12.7.0",
+    "form-data": "^4.0.5",
     "groq-sdk": "^0.5.0",
+    "lucide-react": "^0.556.0",
     "next": "^16.0.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "yargs": "^18.0.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",

@@ -1,16 +1,41 @@
+require('dotenv').config({ path: './.env.local' });
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: {},
+  reactStrictMode: true,
+  experimental: {
+    imgOptTimeoutInSeconds: 120,
+  },
   images: {
+    qualities: [50, 75],
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'pixabay.com',
-        pathname: '/get/**',
+        hostname: 'firebasestorage.googleapis.com',
       },
       {
         protocol: 'https',
-        hostname: 'cdn.pixabay.com',
+        hostname: 'pixabay.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'placehold.co',
+      },
+      {
+        protocol: 'https',
+        hostname: 'via.placeholder.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'placeholder.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'image.pollinations.ai',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ibb.co',
       },
     ],
   },

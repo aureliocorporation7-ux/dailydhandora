@@ -2,7 +2,7 @@ name: Daily News Bot
 
 on:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -27,6 +27,7 @@ jobs:
           echo "FIREBASE_SERVICE_KEY=${{ secrets.FIREBASE_SERVICE_KEY }}" >> .env
           echo "PIXABAY_API_KEY=${{ secrets.PIXABAY_API_KEY }}" >> .env
           echo "GOD_API_KEY=${{ secrets.GOD_API_KEY }}" >> .env
+          echo "REVALIDATE_URL=${{ secrets.REVALIDATE_URL }}" >> .env
       
       - name: Run bot
         run: npm run bot

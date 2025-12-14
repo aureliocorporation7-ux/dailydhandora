@@ -1,108 +1,125 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase-client';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { useState, useRef, useEffect } from 'react';
+import { useNotifications } from '@/app/contexts/NotificationContext';
+import { Bell, X } from 'lucide-react';
 import Link from 'next/link';
 import NotificationItem from './NotificationItem';
 
 export default function NotificationBell() {
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [hasMounted, setHasMounted] = useState(false);
+  const { notifications, unreadCount, markAllAsRead, markAsRead } = useNotifications();
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hasMounted) return;
-
-    const articlesRef = collection(db, 'articles');
-    const q = query(articlesRef, orderBy('createdAt', 'desc'), limit(10));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newNotifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.().toISOString() || new Date().toISOString(),
-      }));
-      
-      setNotifications(newNotifications);
-      
-      const lastSeen = localStorage.getItem('lastSeenNotification');
-      if (lastSeen) {
-        const count = newNotifications.filter(n => 
-          new Date(n.createdAt) > new Date(lastSeen)
-        ).length;
-        setUnreadCount(count);
-      } else {
-        setUnreadCount(newNotifications.length);
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
       }
-    });
+    }
 
-    return () => unsubscribe();
-  }, [hasMounted]);
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
 
-  const markAllAsRead = () => {
-    const now = new Date().toISOString();
-    localStorage.setItem('lastSeenNotification', now);
-    setUnreadCount(0);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const toggleDropdown = () => {
+    setIsOpen(!isOpen);
   };
 
-  const lastSeen = hasMounted ? localStorage.getItem('lastSeenNotification') : null;
-  const unreadNotifications = notifications.filter(n => !lastSeen || new Date(n.createdAt) > new Date(lastSeen));
+  const handleMarkAllRead = () => {
+    markAllAsRead();
+    setIsOpen(false);
+  };
+
+  const handleNotificationClick = (articleId) => {
+    markAsRead(articleId);
+    setIsOpen(false);
+  };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={dropdownRef} suppressHydrationWarning>
+      {/* Bell Icon Button - Styled for Navbar */}
       <button
-        onClick={() => setShowDropdown(!showDropdown)}
-        className="relative p-2 hover:bg-gray-800 rounded-full"
+        onClick={toggleDropdown}
+        className="relative p-2 text-white hover:text-yellow-200 transition-colors duration-200 rounded-full hover:bg-white/10"
+        aria-label="Notifications"
       >
-        <span className="material-symbols-outlined">notifications</span>
-        {hasMounted && unreadCount > 0 && (
-          <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+        <Bell className="w-6 h-6" />
+        
+        {/* Badge */}
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-orange-600 bg-white rounded-full min-w-[20px] shadow-lg animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {showDropdown && (
-        <div className="absolute right-0 mt-2 w-80 bg-gray-900 rounded-lg shadow-lg border border-gray-800 z-50">
-          <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-            <h3 className="font-bold">नई पोस्ट ({hasMounted ? unreadCount : 0})</h3>
-            {hasMounted && unreadCount > 0 && (
+      {/* Dropdown Panel */}
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-50 max-h-[600px] overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-red-50">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">🔔 नोटिफिकेशन</h3>
+              {unreadCount > 0 && (
+                <p className="text-sm text-gray-600">{unreadCount} नए आर्टिकल</p>
+              )}
+            </div>
+            
+            {unreadCount > 0 && (
               <button
-                onClick={markAllAsRead}
-                className="text-blue-500 text-sm hover:underline"
+                onClick={handleMarkAllRead}
+                className="text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
               >
-                सभी को पढ़ा हुआ मार्क करें
+                सभी पढ़ा मार्क करें
               </button>
             )}
           </div>
-          
-          <div className="max-h-96 overflow-y-auto">
-            {hasMounted ? (
-              unreadNotifications.length > 0 ? (
-                unreadNotifications.map((notif) => (
-                  <NotificationItem 
-                    key={notif.id}
-                    notification={notif}
-                    onNotificationClick={() => setShowDropdown(false)}
-                  />
-                ))
-              ) : (
-                <p className="p-4 text-center text-gray-400">
-                  आप पूरी तरह से अपडेट हैं!
-                </p>
-              )
+
+          {/* Notification List */}
+          <div className="overflow-y-auto max-h-[500px] custom-scrollbar">
+            {notifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Bell className="w-10 h-10 text-gray-400" />
+                </div>
+                <p className="text-gray-600 font-medium mb-1">कोई नया आर्टिकल नहीं</p>
+                <p className="text-sm text-gray-500">जब नए आर्टिकल पब्लिश होंगे, आपको यहाँ दिखेंगे</p>
+              </div>
             ) : (
-              <p className="p-4 text-center text-gray-400">लोड हो रहा है...</p>
+              <div className="divide-y divide-gray-100">
+                {notifications.map((notification) => (
+                  <NotificationItem
+                    key={notification.id}
+                    notification={notification}
+                    onClick={() => handleNotificationClick(notification.id)}
+                  />
+                ))}
+              </div>
             )}
           </div>
+
+          {/* Footer */}
+          {notifications.length > 0 && (
+            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-center">
+              <Link
+                href="/"
+                onClick={() => setIsOpen(false)}
+                className="text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
+              >
+                सभी आर्टिकल देखें →
+              </Link>
+            </div>
+          )}
         </div>
       )}
+
+
     </div>
   );
 }

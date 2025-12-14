@@ -1,9 +1,12 @@
 import { db } from '@/lib/firebase';
 import ArticleMeta from '@/app/components/ArticleMeta';
+import Image from 'next/image';
+
+export const revalidate = 3600; // Revalidate every hour
 
 async function getArticle(id) {
   try {
-    const doc = await db.collection('articles').doc(id).get();
+    const doc = await db.collection('articles').doc(id).get({ next: { tags: ['collection'] } });
     
     if (!doc.exists) {
       return null;
@@ -40,17 +43,21 @@ export default async function ArticlePage({ params }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-[#0a0a0a] text-white" suppressHydrationWarning>
       <article className="max-w-4xl mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold mb-6">{article.title}</h1>
-        
-        {article.imageUrl && (
-          <img 
-            src={article.imageUrl} 
-            alt={article.title}
-            className="w-full h-96 object-cover rounded-lg mb-8"
+        <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden">
+          <Image
+            src={article.imageUrl}
+            alt={article.headline || 'Article image'}
+            fill
+            className="object-cover"
+            quality={75}
+            priority
           />
-        )}
+        </div>
+        <h1 className="text-4xl font-bold mb-6">{article.headline}</h1>
+        
+
 
         <ArticleMeta category={article.category} createdAt={article.createdAt} />
 
@@ -83,7 +90,7 @@ export async function generateMetadata({ params }) {
   }
 
   return {
-    title: `${article.title} - DailyDhandora`,
-    description: article.summary || article.title,
+    title: `${article.headline} - DailyDhandora`,
+    description: article.summary || article.headline,
   };
 }

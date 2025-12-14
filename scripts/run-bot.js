@@ -1,180 +1,166 @@
-// Load environment variables
+// scripts/run-bot.js
 if (process.env.CI) {
   require('dotenv').config({ path: '.env' });
 } else {
-  require('dotenv').config({ path: '.env.local' });
+  require('dotenv').config({ path: '.env.local', override: true });
 }
 
-
-require('dotenv').config({ path: '.env.local' });
+const { db, admin } = require('../lib/firebase');
 const Parser = require('rss-parser');
-const { FieldValue } = require('firebase-admin/firestore');
-const firebase = require('../lib/firebase');
-const gemini = require('../lib/gemini');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
+const axios = require('axios');
+const { HfInference } = require('@huggingface/inference');
+const FormData = require('form-data');
+const fs = require('fs');
 
-/**
- * Fetches image from Pixabay API based on keyword
- * @param {string} keyword - Search keyword (e.g., "cricket", "politics")
- * @returns {Promise<string|null>} - Image URL or null
- */
-async function getImageFromPixabay(keyword) {
-  try {
-    const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY || '47648127-c33c7c87d0f32d9bb2ad51d43';
-    const url = `https://pixabay.com/api/?key=${PIXABAY_API_KEY}&q=${encodeURIComponent(keyword)}&image_type=photo&per_page=3&safesearch=true&orientation=horizontal`;
-    
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.log(`  ⚠️  Pixabay API error: ${response.status}`);
-      return null;
-    }
-    
-    const data = await response.json();
-    if (data.hits && data.hits.length > 0) {
-      console.log(`  🎨 Image: Pixabay (${keyword})`);
-      // Pick a random image from the results to ensure variety
-      const randomImage = data.hits[Math.floor(Math.random() * data.hits.length)];
-      // Use larger image for better quality (1280px instead of 640px)
-      return randomImage.largeImageURL || randomImage.webformatURL;
-    }
-    
-    console.log(`  ⚠️  No Pixabay images found for: ${keyword}`);
-    return null;
-  } catch (error) {
-    console.error(`  ❌ Pixabay error:`, error.message);
-    return null;
-  }
-}
+const LOCAL_PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
-/**
- * Try multiple related keywords if primary fails
- */
-async function getImageWithFallbacks(keyword, category) {
-  // Try primary keyword first
-  let imageUrl = await getImageFromPixabay(keyword);
-  if (imageUrl) {
-    console.log(`  🎨 Image: Pixabay (${keyword})`);
-    return imageUrl;
-  }
-  
-  // Fallback keyword map
-  const fallbacks = {
-    'Politics': ['government', 'parliament', 'politics'],
-    'Technology': ['technology', 'smartphone', 'computer'],
-    'Sports': ['sports', 'cricket', 'stadium'],
-    'Entertainment': ['cinema', 'bollywood', 'movie'],
-    'Business': ['business', 'stock-market', 'finance']
-  };
-  
-  const keywords = fallbacks[category] || ['news', 'india'];
-  
-  for (const fallbackKeyword of keywords) {
-    if (fallbackKeyword === keyword) continue; // Skip already tried
-    imageUrl = await getImageFromPixabay(fallbackKeyword);
-    if (imageUrl) {
-      console.log(`  🎨 Image: Pixabay (${fallbackKeyword} - fallback)`);
-      return imageUrl;
-    }
-  }
-  
-  console.log(`  ⚠️  Pixabay: No images found, using placeholder`);
-  return null;
-}
+// Initialize Clients
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const groq = new Groq({ apiKey: process.env.GOD_API_KEY });
+const hf = new HfInference(process.env.HUGGINGTOCK);
+const IMGBB_KEY = process.env.IMGBB;
 
-/**
- * Validate image URL is accessible
- */
-async function validateImageUrl(url) {
-  if (!url) return false;
-  
-  try {
-    const response = await fetch(url, { method: 'HEAD', timeout: 5000 });
-    return response.ok;
-  } catch (error) {
-    return false;
-  }
-}
-
-/**
- * Extracts image URL from RSS feed item
- * Supports multiple RSS image formats and Google News specific patterns
- * @param {Object} item - RSS parser item object
- * @returns {string|null} - Image URL or null if not found
- */
 const RSS_FEEDS = [
   'https://news.google.com/rss/search?q=when:24h+allinurl:timesofindia.com&ceid=IN:en&hl=en-IN',
   'https://news.google.com/rss/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNRFZ4ZERBU0JXVnVMVWRDS0FBUAE?ceid=IN:en&hl=en-IN'
 ];
 
-const parser = new Parser({
-  customFields: {
-    item: [
-      ['media:content', 'media:content'],
-      ['media:thumbnail', 'media:thumbnail'],
-    ]
-  }
-});
+const SYSTEM_PROMPT = `
+You are a Viral News Editor for a top-tier Indian news portal, known for your ability to write compelling headlines and engaging stories that people love to read and share.
+Your primary goal is to maximize reader engagement (CTR) by creating a sense of curiosity and urgency, without resorting to repetitive or generic clickbait.
 
+### OUTPUT FORMAT:
+Strictly JSON only.
+
+### TASKS:
+
+1. **HEADLINE (Hindi - THE ART OF THE CLICK):**
+   - **Goal:** Create a unique, powerful headline that stops the scroll. It should feel urgent and important.
+   - **Technique:** Use curiosity, surprise, or a strong emotional hook. Think like a master copywriter.
+   - **Creative Patterns (use variety, don't repeat the same style):**
+     - Question-based: "[Person] ने उठाया बड़ा कदम, क्या है इसके पीछे की वजह?"
+     - Consequence-focused: "[Event] के बाद बदल गए समीकरण, अब क्या होगा आगे?"
+     - Reveal-style: "खुलासा: [Topic] पर सामने आई वो रिपोर्ट, जिसे सब जानना चाहते हैं।"
+     - Direct & Punchy: "[News] को लेकर सरकार का बड़ा ऐलान, आम आदमी पर होगा सीधा असर।"
+   - **Constraint:** < 15 words. Must be dramatic but 100% factual.
+   - **NEGATIVE CONSTRAINT:** Avoid using "बड़ा झटका" or "मचा हड़कंप" in every headline. Use them only when truly appropriate for major breaking news.
+
+2. **ARTICLE BODY (Hindi - ENGAGEMENT FOCUSED):**
+   - **Length:** 400-500 words(Crisp & Spicy).
+   - **Tone:** Conversational, informative, and urgent. (Like an expert friend explaining something important).
+   - **Formatting:**
+     - Use **bold tags** (<strong>text</strong>) for key names, places, and numbers.
+     - Short paragraphs (2-3 lines max) for easy mobile reading.
+   - **Structure:**
+     1. **The Hook (Para 1):** Start with the most impactful detail. Answer "What's the most surprising part of this news?" in the first line.
+     2. **The Inside Story (<h3> Subheading):** Explain the core event. What, why, and how it happened.
+     3. **Why It Matters (<h3> Subheading):** Explain the impact on the reader or the country.
+     4. **Key Highlights (<ul><li>):** Summarize the 3 most important takeaways in bullet points.
+   - **Constraint:** Every sentence should add value. No filler content.
+
+3. **IMAGE PROMPT (English):**
+   - **Subject:** Capture the core emotion or action of the story. Focus on expressions, environment, and mood.
+   - **Style:** "Cinematic, photorealistic, 8k, high contrast, dramatic lighting, press photography style".
+   - **Instruction:** If a person is central, start with "Dramatic close-up portrait of...". If it's an event, start with "Cinematic action shot of...".
+
+4. **TAGS:** 5 relevant and trending tags (Hindi or English).
+5. **CATEGORY:** A single, relevant category (e.g., राजनीति, खेल, तकनीक).
+
+### JSON STRUCTURE EXAMPLE:
+{
+  "headline": "क्या सच में बदल जाएगा [Something]? सरकार ने लिया बड़ा फैसला!",
+  "content": "<p><strong>[City/Context]</strong>: एक ऐसी खबर सामने आई है जिसने सभी का ध्यान खींच लिया है।...</p><h3>क्या है पूरा मामला?</h3><p>सूत्रों के अनुसार, <strong>[Name]</strong> ने...</p><h3>इसका क्या असर होगा?</h3><p>जानकारों का मानना है कि...</p><ul><li>मुख्य बिंदु 1</li><li>मुख्य बिंदु 2</li><li>मुख्य बिंदु 3</li></ul>",
+  "image_prompt": "Dramatic close-up portrait of a concerned politician looking at official documents, cinematic lighting, 8k, photorealistic.",
+  "tags": ["#tag1", "#tag2", "#tag3"],
+  "category": "राजनीति"
+}
+`;
+
+const parser = new Parser();
 let processedCount = 0;
 let errorCount = 0;
 
-async function runBot() {
-  console.log('🤖 Starting DailyDhandora News Bot at:', new Date().toISOString());
+function cleanJSON(text) {
+  // Remove markdown code blocks
+  let cleaned = text.replace(/```json\s*/g, '').replace(/```/g, '');
 
-  try {
-
-    for (const feedUrl of RSS_FEEDS) {
-      console.log(`
-📡 Fetching RSS feed: ${feedUrl}`);
-      
-      try {
-        const feed = await parser.parseURL(feedUrl);
-        console.log(`✅ Found ${feed.items.length} articles in feed`);
-
-        const itemsToProcess = feed.items.slice(0, 5); // Process only top 5 for now
-
-        for (const item of itemsToProcess) {
-          await processArticle(item);
-          await sleep(2000); // Wait 2 seconds between articles
-        }
-      } catch (feedError) {
-        console.error(`❌ Error processing feed ${feedUrl}:`, feedError.message);
-        errorCount++;
-        continue;
-      }
-    }
-
-    console.log('\n✅ Bot execution completed!');
-    console.log(`📊 Stats: ${processedCount} processed, ${errorCount} errors`);
-  } catch (error) {
-    console.error('🔥 Fatal error:', error);
-    process.exit(1);
+  // Find JSON object
+  const jsonMatch = cleaned.match(/{[\s\S]*}/);
+  if (!jsonMatch) {
+    throw new Error('No JSON object found in response');
   }
+  return jsonMatch[0];
+}
+
+async function generateAndUploadImage(prompt) {
+    console.log("  🎨 Generating image with Hugging Face...");
+    try {
+        const result = await hf.textToImage({
+            model: "black-forest-labs/FLUX.1-schnell",
+            inputs: prompt,
+            parameters: {
+                guidance_scale: 0.0,
+                num_inference_steps: 4,
+            }
+        });
+
+        const buffer = Buffer.from(await result.arrayBuffer());
+        
+        console.log("  📤 Uploading image to ImgBB...");
+        const form = new FormData();
+        form.append('image', buffer.toString('base64'));
+
+        const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, form, {
+            headers: form.getHeaders(),
+        });
+
+        if (response.data.success) {
+            console.log("  ✅ Image uploaded successfully to ImgBB.");
+            return response.data.data.url;
+        } else {
+            console.error("  ❌ ImgBB upload failed:", response.data);
+            return null;
+        }
+    } catch (error) {
+        console.error("  ❌ Error generating or uploading image:", error.message);
+        return null;
+    }
 }
 
 async function checkDuplicate(headline, sourceUrl) {
   console.log('  🔎 Checking for duplicates...');
-  const articlesRef = firebase.db.collection('articles');
+  const articlesRef = db.collection('articles');
   
-  // Check 1: Match by source URL (most reliable)
   const urlSnapshot = await articlesRef.where('sourceUrl', '==', sourceUrl).limit(1).get();
-  if (!urlSnapshot.empty) {
-    return true;
-  }
+  if (!urlSnapshot.empty) return true;
 
-  // Check 2: Match by exact headline
-  const headlineSnapshot = await articlesRef.where('title', '==', headline).limit(1).get();
-  if (!headlineSnapshot.empty) {
-    return true;
-  }
+  const headlineSnapshot = await articlesRef.where('headline', '==', headline).limit(1).get();
+  if (!headlineSnapshot.empty) return true;
 
   return false;
+}
+
+async function generateContent(articleText) {
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: articleText }],
+      model: "moonshotai/kimi-k2-instruct-0905",
+      response_format: { type: "json_object" }
+    });
+    const content = completion.choices[0].message.content;
+    const cleaned = cleanJSON(content);
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error('  ❌ Groq API error:', e.message);
+    return null;
+  }
 }
 
 async function processArticle(item) {
   const headline = item.title;
   const sourceUrl = item.link;
-  const sourceTitle = headline;
-
   const preview = headline.length > 60 ? `${headline.substring(0, 60)}...` : headline;
   console.log(`
 📰 Processing: "${preview}"`);
@@ -186,83 +172,41 @@ async function processArticle(item) {
       return;
     }
 
-    console.log('  🤖 Generating AI content...');
-    // Single attempt with smart model selection (no manual retries)
-    const articleData = await gemini.generateArticle(headline, sourceUrl);
-
-    // Safety: Extract keyword from category if AI didn't provide
-    if (!articleData.imageKeyword) {
-      const categoryKeywords = {
-        'Politics': 'government',
-        'Technology': 'technology',
-        'Sports': 'sports',
-        'Entertainment': 'cinema',
-        'Business': 'business',
-      };
-      articleData.imageKeyword = categoryKeywords[articleData.category] || 'news';
+    console.log('  🤖 Generating AI content with Groq...');
+    const aiData = await generateContent(headline);
+    if (!aiData || !aiData.headline || !aiData.content) {
+      console.log('  ⏩ Skipped: AI content generation failed or returned invalid data.');
+      errorCount++;
+      return;
     }
 
-    // IMAGE FALLBACK STRATEGY
     let finalImageUrl = null;
-    if (articleData.imageKeyword) {
-      finalImageUrl = await getImageWithFallbacks(
-        articleData.imageKeyword, 
-        articleData.category
-      );
+
+    if (aiData.image_prompt) {
+        finalImageUrl = await generateAndUploadImage(aiData.image_prompt);
     }
 
-    // Validate image URL before saving
-    if (finalImageUrl) {
-      const isValid = await validateImageUrl(finalImageUrl);
-      if (!isValid) {
-        console.log(`  ⚠️  Image URL invalid, using category fallback`);
-        const categoryImages = {
-          'Politics': 'https://placehold.co/800x600/262626/f5f5f5?text=Politics',
-          'Technology': 'https://placehold.co/800x600/262626/f5f5f5?text=Technology',
-          'Sports': 'https://placehold.co/800x600/262626/f5f5f5?text=Sports',
-          'Entertainment': 'https://placehold.co/800x600/262626/f5f5f5?text=Entertainment',
-          'Business': 'https://placehold.co/800x600/262626/f5f5f5?text=Business',
-        };
-        finalImageUrl = categoryImages[articleData.category] || 'https://placehold.co/800x600/262626/f5f5f5?text=News';
-      }
-    }
-
-    // Fallback to placeholder images if still no image
     if (!finalImageUrl) {
-      const categoryImages = {
-        'Politics': 'https://placehold.co/800x600/262626/f5f5f5?text=Politics',
-        'Technology': 'https://placehold.co/800x600/262626/f5f5f5?text=Technology',
-        'Sports': 'https://placehold.co/800x600/262626/f5f5f5?text=Sports',
-        'Entertainment': 'https://placehold.co/800x600/262626/f5f5f5?text=Entertainment',
-        'Business': 'https://placehold.co/800x600/262626/f5f5f5?text=Business',
-      };
-      finalImageUrl = categoryImages[articleData.category] || 'https://placehold.co/800x600/262626/f5f5f5?text=News';
-      console.log(`  🎨 Image: Category fallback (${articleData.category})`);
+      console.log('  🔄 Falling back to local placeholder image...');
+      finalImageUrl = LOCAL_PLACEHOLDER_IMAGE;
     }
 
-    // Save to Firestore
     const dataToSave = {
-      title: articleData.title,
-      slug: articleData.slug,
-      summary: articleData.summary,
-      content: articleData.content,
-      tags: articleData.tags || [],
-      category: articleData.category,
+      headline: aiData.headline,
+      content: aiData.content,
+      tags: aiData.tags || [],
+      category: aiData.category || 'Other',
       sourceUrl: sourceUrl,
-      sourceTitle: sourceTitle,
       imageUrl: finalImageUrl,
-      imageKeyword: articleData.imageKeyword || null,
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
       views: 0
     };
 
-    const db = firebase.db; // Correctly reference the exported db object
     const docRef = await db.collection('articles').add(dataToSave);
-    console.log(`✅ Saved: ${articleData.title.substring(0, 60)}...`);
-    console.log(`   ID: ${docRef.id}`);
+    console.log(`✅ Saved: ${aiData.headline.substring(0, 60)}... (ID: ${docRef.id})`);
     processedCount++;
   } catch (error) {
-    console.error(`  ❌ Failed: ${error.message}`);
+    console.error(`  ❌ Failed to process article "${headline}":`, error.message);
     errorCount++;
   }
 }
@@ -272,38 +216,51 @@ function sleep(ms) {
 }
 
 async function triggerRevalidation() {
-  const revalidateUrl = 'https://daily-dhandora.vercel.app/api/revalidate';
-  console.log(`\n🔄 Triggering cache revalidation at: ${revalidateUrl}`);
+  const revalidateUrl = process.env.REVALIDATE_URL || 'https://daily-dhandora.vercel.app/api/revalidate';
+  if (!revalidateUrl) {
+    console.log(`
+⚠️ REVALIDATE_URL not set. Skipping cache revalidation.`);
+    return;
+  }
+  console.log(`
+🔄 Triggering cache revalidation at: ${revalidateUrl}`);
   
   try {
-    const response = await fetch(revalidateUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    const responseText = await response.text();
-
-    if (response.ok && responseText) {
-      try {
-        const body = JSON.parse(responseText);
-        if (body.revalidated) {
-          console.log(`✅ Cache revalidated successfully! Timestamp: ${body.timestamp}`);
-        } else {
-          console.log(`⚠️  Revalidation API returned 'false'. Message: ${body.message || 'No message'}`);
-        }
-      } catch (parseError) {
-        console.error('❌ Failed to parse JSON response from revalidation API.');
-        console.error('   Response text:', responseText);
-      }
-    } else if (!response.ok) {
-        console.log(`⚠️  Revalidation request failed with status: ${response.status}`);
-        console.log(`   Response text: ${responseText || '(empty)'}`);
-    } else {
-        console.log('✅ Revalidation request successful, but response body was empty. Cache may still be revalidated.');
+    const response = await fetch(revalidateUrl, { method: 'GET' });
+    if (!response.ok) {
+      throw new Error(`Request failed with status code ${response.status}`);
     }
+    const data = await response.json();
+    console.log('✅ Cache revalidation request sent successfully!', data);
   } catch (error) {
     console.error('❌ Critical error during revalidation request:', error.message);
   }
+}
+
+async function runBot() {
+  console.log('🤖 Starting DailyDhandora News Bot at:', new Date().toISOString());
+
+  for (const feedUrl of RSS_FEEDS) {
+    console.log(`
+📡 Fetching RSS feed: ${feedUrl}`);
+    try {
+      const feed = await parser.parseURL(feedUrl);
+      console.log(`✅ Found ${feed.items.length} articles in feed`);
+      const itemsToProcess = feed.items.slice(0, 5);
+
+      for (const item of itemsToProcess) {
+        await processArticle(item);
+        await sleep(20000); // 20-second delay
+      }
+    } catch (feedError) {
+      console.error(`❌ Error processing feed ${feedUrl}:`, feedError.message);
+      errorCount++;
+    }
+  }
+
+  console.log(`
+✅ Bot execution completed!`);
+  console.log(`📊 Stats: ${processedCount} processed, ${errorCount} errors`);
 }
 
 async function main() {
@@ -313,7 +270,8 @@ async function main() {
     console.error('🔥 A critical error occurred in the bot:', error);
   } finally {
     await triggerRevalidation();
-    console.log('\n👋 Bot script finished.');
+    console.log(`
+👋 Bot script finished.`);
   }
 }
 
@@ -321,5 +279,3 @@ main().catch(error => {
   console.error('🔥 Unhandled exception in main execution:', error);
   process.exit(1);
 });
-
-module.exports = { getImageWithFallbacks };

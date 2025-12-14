@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+
+export const revalidate = 3600; // Revalidate every hour
 
 function getFirebaseAdmin() {
   if (getApps().length === 0) {
@@ -28,7 +29,7 @@ async function getArticle(slug) {
       .collection('articles')
       .where('slug', '==', slug)
       .limit(1)
-      .get();
+      .get({ next: { tags: ['collection'] } });
 
     if (snapshot.empty) return null;
 
@@ -107,26 +108,7 @@ export default async function BlogPost({ params }) {
       </header>
 
       <main className="flex-grow pb-32">
-        {/* Hero Image with Next.js Image */}
-        <div className="w-full h-64 bg-gradient-to-br from-primary/20 to-primary-light/20 relative">
-          {article.imageUrl ? (
-            <Image
-              src={article.imageUrl}
-              alt={article.title}
-              fill
-              className="object-cover"
-              sizes="448px"
-              quality={80}
-              priority
-              placeholder="blur"
-              blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iIzI2MjYyNiIvPjwvc3ZnPg=="
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="text-8xl opacity-30">📄</span>
-            </div>
-          )}
-        </div>
+
 
         <div className="px-4 pt-6">
           <h1 className="text-3xl font-display font-bold leading-tight mb-2">
@@ -172,25 +154,6 @@ export default async function BlogPost({ params }) {
             <div className="grid gap-4">
               {relatedArticles.map(rel => (
                 <Link key={rel.id} href={`/blog/${rel.slug}`} className="bg-bg-secondary rounded-lg border border-bg-tertiary flex flex-col overflow-hidden hover:border-primary/50">
-                  <div className="w-full h-32 bg-gradient-to-br from-primary/10 to-primary-light/10 relative">
-                    {rel.imageUrl ? (
-                      <Image
-                        src={rel.imageUrl}
-                        alt={rel.title}
-                        fill
-                        className="object-cover"
-                        sizes="448px"
-                        quality={70}
-                        loading="lazy"
-                        placeholder="blur"
-                        blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iIzI2MjYyNiIvPjwvc3ZnPg=="
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-5xl opacity-30">📰</span>
-                      </div>
-                    )}
-                  </div>
                   <div className="p-4">
                     <h3 className="text-lg font-display font-bold line-clamp-2">
                       {rel.title}
