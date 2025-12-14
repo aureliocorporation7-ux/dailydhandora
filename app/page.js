@@ -40,6 +40,7 @@ export default async function Home() {
                   article={article} 
                   index={index} 
                   isFeatured={index === 0} 
+                  priority={index === 0}
                 />
               </div>
             ))}

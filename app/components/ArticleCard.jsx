@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function ArticleCard({ article, index, isFeatured = false }) {
+export default function ArticleCard({ article, index, isFeatured = false, priority = false }) {
   const [timeAgo, setTimeAgo] = useState('');
   const [imgSrc, setImgSrc] = useState(article.imageUrl);
 
@@ -48,7 +48,7 @@ export default function ArticleCard({ article, index, isFeatured = false }) {
           className="object-cover"
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           quality={isFeatured ? 75 : 50}
-          priority={index < 2}
+          priority={priority}
           onError={() => setImgSrc('https://placehold.co/600x400/000000/FFFFFF/png?text=Image+Not+Found')}
         />
       </div>

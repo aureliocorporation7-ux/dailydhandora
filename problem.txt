@@ -421,3 +421,30 @@ Details:
 Files Modified:
 - .github/workflows/cron.yml
 Status: Implemented.
+---
+Date: 2025-12-15
+Issue: Firebase Admin SDK initialization error in GitHub Actions.
+Solution: Corrected the environment variable name for the Firebase service key.
+Details:
+1.  **Error Analysis:**
+    *   The bot was failing in the GitHub Actions workflow with a "Firebase Admin SDK initialization error".
+    *   This was because the workflow was setting the `FIREBASE_SERVICE_KEY` environment variable, but the `lib/firebase.js` file was expecting `FIREBASE_SERVICE_KEY_BASE64`.
+2.  **Correction:**
+    *   Modified the `.github/workflows/cron.yml` file to set the correct environment variable name: `FIREBASE_SERVICE_KEY_BASE64`.
+Files Modified:
+- .github/workflows/cron.yml
+Status: Implemented.
+---
+Date: 2025-12-15
+Issue: The user wants to prioritize the loading of images for the latest articles.
+Solution: Implemented prioritized image loading for the first article on the homepage.
+Details:
+1.  **Requirement:**
+    *   The user wanted to prioritize the loading of images for the latest articles to improve the user experience.
+2.  **Correction:**
+    *   Modified the `Home` component in `app/page.js` to pass a `priority` prop to the `ArticleCard` component for the first article.
+    *   Modified the `ArticleCard` component to accept the `priority` prop and pass it to the `next/image` component.
+Files Modified:
+- app/page.js
+- app/components/ArticleCard.jsx
+Status: Implemented.
