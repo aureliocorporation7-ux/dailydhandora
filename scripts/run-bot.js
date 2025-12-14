@@ -269,6 +269,7 @@ async function main() {
   } catch (error) {
     console.error('🔥 A critical error occurred in the bot:', error);
   } finally {
+    await sleep(60000); // 60-second delay before revalidation
     await triggerRevalidation();
     console.log(`
 👋 Bot script finished.`);
