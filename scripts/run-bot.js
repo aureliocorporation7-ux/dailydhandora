@@ -143,10 +143,12 @@ async function checkDuplicate(headline, sourceUrl) {
 }
 
 async function generateContent(articleText) {
+  const model = "moonshotai/kimi-k2-instruct-0905";
+  console.log(`  🤖 Generating content with model: ${model}`);
   try {
     const completion = await groq.chat.completions.create({
       messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: articleText }],
-      model: "moonshotai/kimi-k2-instruct-0905",
+      model: model,
       response_format: { type: "json_object" }
     });
     const content = completion.choices[0].message.content;
