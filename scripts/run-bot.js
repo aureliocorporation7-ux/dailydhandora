@@ -218,7 +218,9 @@ function sleep(ms) {
 }
 
 async function triggerRevalidation() {
-  const revalidateUrl = process.env.REVALIDATE_URL || 'https://daily-dhandora.vercel.app/api/revalidate';
+  const baseUrl = (process.env.REVALIDATE_URL || 'https://daily-dhandora.vercel.app').replace(/\/$/, '');
+  const revalidateUrl = `${baseUrl}/api/revalidate`;
+
   if (!revalidateUrl) {
     console.log(`
 ⚠️ REVALIDATE_URL not set. Skipping cache revalidation.`);
