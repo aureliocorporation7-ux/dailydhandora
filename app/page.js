@@ -7,14 +7,21 @@ export const revalidate = 0;
 
 async function getArticles() {
   try {
-    const snapshot = await db.collection('articles').orderBy('createdAt', 'desc').limit(20).get({ next: { tags: ['collection'] } });
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-    }));
+    const snapshot = await db.collection('articles').orderBy('createdAt', 'desc').limit(20).get();
+    
+    const newsData = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt ? data.createdAt.toDate().toISOString() : null,
+      };
+    });
+
+    console.log(`✅ Homepage fetched ${newsData.length} articles.`);
+    return newsData;
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error fetching articles:', error);
     return [];
   }
 }
