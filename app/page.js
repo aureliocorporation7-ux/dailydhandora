@@ -2,7 +2,8 @@ import { db } from '@/lib/firebase';
 import ArticleCard from './components/ArticleCard';
 import NotificationBell from './components/NotificationBell';
 
-export const revalidate = 60; // Revalidate every 60 seconds
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 async function getArticles() {
   try {
