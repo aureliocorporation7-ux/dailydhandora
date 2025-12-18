@@ -95,8 +95,10 @@ function cleanJSON(text) {
 }
 
 async function generateAndUploadImage(prompt) {
-    console.log("  🎨 Generating image with Hugging Face...");
+    console.log("  🎨 Starting image generation and upload process...");
     try {
+        // Step 1: Generate Image
+        console.log("  📤 [1/4] Sending request to Hugging Face for image generation...");
         const result = await hf.textToImage({
             model: "black-forest-labs/FLUX.1-schnell",
             inputs: prompt,
@@ -105,26 +107,46 @@ async function generateAndUploadImage(prompt) {
                 num_inference_steps: 4,
             }
         });
+        console.log("  ✅ [2/4] Image data received successfully from Hugging Face.");
 
         const buffer = Buffer.from(await result.arrayBuffer());
         
-        console.log("  📤 Uploading image to ImgBB...");
+        // Step 2: Upload Image
+        console.log("  📤 [3/4] Uploading image to ImgBB...");
         const form = new FormData();
         form.append('image', buffer.toString('base64'));
 
         const response = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, form, {
-            headers: form.getHeaders(),
+            headers: {
+                ...form.getHeaders(),
+            },
         });
 
         if (response.data.success) {
-            console.log("  ✅ Image uploaded successfully to ImgBB.");
+            console.log(`  ✅ [4/4] Image uploaded to ImgBB. URL: ${response.data.data.url}`);
             return response.data.data.url;
         } else {
-            console.error("  ❌ ImgBB upload failed:", response.data);
+            // This is a failure case from ImgBB's API
+            console.error("  ❌ ImgBB upload API returned an error.");
+            console.error("  📋 ImgBB Response:", response.data);
             return null;
         }
     } catch (error) {
-        console.error("  ❌ Error generating or uploading image:", error.message);
+        // This is a network error or other exception
+        console.error("  ❌ A critical error occurred during the image generation or upload process.");
+        if (error.response) {
+            // The request was made and the server responded with a status code
+            // that falls out of the range of 2xx
+            console.error('  Error Data:', error.response.data);
+            console.error('  Error Status:', error.response.status);
+            console.error('  Error Headers:', error.response.headers);
+        } else if (error.request) {
+            // The request was made but no response was received
+            console.error('  Error Request:', error.request);
+        } else {
+            // Something happened in setting up the request that triggered an Error
+            console.error('  Error Message:', error.message);
+        }
         return null;
     }
 }
