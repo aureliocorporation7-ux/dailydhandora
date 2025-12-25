@@ -136,17 +136,29 @@ async function generateAndUploadImage(prompt) {
             }
         }
 
-        // 2. Try Backup Token if Primary failed twice
+        // 2. Try Backup Token 1 if Primary failed twice
         if (!buffer && process.env.HUGGINGTOCK_BACKUP) {
-             console.log("  🔄 Switching to Backup Token...");
-             await wait(30000); // Small cooldown before switch
-             buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token');
+             console.log("  🔄 Switching to Backup Token 1...");
+             await wait(30000); 
+             buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token 1');
 
-             // Retry Backup if failed
              if (!buffer) {
-                console.log("  ⏳ Waiting 60s before retrying Backup Token...");
+                console.log("  ⏳ Waiting 60s before retrying Backup Token 1...");
                 await wait(60000);
-                buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token (Retry)');
+                buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token 1 (Retry)');
+             }
+        }
+
+        // 3. Try Backup Token 2 if Backup 1 failed twice
+        if (!buffer && process.env.HUGGINGTOCK_BACKUP2) {
+             console.log("  🔄 Switching to Backup Token 2...");
+             await wait(30000);
+             buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP2, 'Backup Token 2');
+
+             if (!buffer) {
+                console.log("  ⏳ Waiting 60s before retrying Backup Token 2...");
+                await wait(60000);
+                buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP2, 'Backup Token 2 (Retry)');
              }
         }
 
