@@ -38,7 +38,7 @@ app.prepare().then(() => {
   // ---------------------------------------------------------
   
   // This handles all other routes (Home, Article Page, etc.) and serves the React App
-  server.all('(.*)', (req, res) => {
+  server.all(/.*/, (req, res) => {
     return handle(req, res);
   });
 
