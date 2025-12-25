@@ -20,9 +20,9 @@
     "form-data": "latest",
     "groq-sdk": "latest",
     "lucide-react": "latest",
-    "next": "latest",
-    "react": "latest",
-    "react-dom": "latest",
+    "next": "^16.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "rss-parser": "latest",
     "sharp": "latest",
     "yargs": "latest"

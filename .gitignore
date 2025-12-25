@@ -40,3 +40,4 @@ problem.txt
 .vercel/
 scripts/*.bak*
 scripts/*.backup
+history.txt
