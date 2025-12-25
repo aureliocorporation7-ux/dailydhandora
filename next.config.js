@@ -7,6 +7,7 @@ const nextConfig = {
     imgOptTimeoutInSeconds: 120,
   },
   images: {
+    unoptimized: true,
     qualities: [50, 75],
     remotePatterns: [
       {
