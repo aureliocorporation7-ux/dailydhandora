@@ -117,22 +117,44 @@ async function generateAndUploadImage(prompt) {
         }
     }
 
+    // Helper for delay
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
     try {
-        // Step 1: Generate Image
         console.log("  📤 [1/4] Sending request to Hugging Face for image generation...");
-        
-        let buffer = await tryGenerate(process.env.HUGGINGTOCK, 'Primary Token');
-        
+        let buffer = null;
+
+        // 1. Try Primary Token
+        if (process.env.HUGGINGTOCK) {
+            buffer = await tryGenerate(process.env.HUGGINGTOCK, 'Primary Token');
+            
+            // Retry Primary if failed (likely rate limit)
+            if (!buffer) {
+                console.log("  ⏳ Waiting 60s before retrying Primary Token...");
+                await wait(60000);
+                buffer = await tryGenerate(process.env.HUGGINGTOCK, 'Primary Token (Retry)');
+            }
+        }
+
+        // 2. Try Backup Token if Primary failed twice
         if (!buffer && process.env.HUGGINGTOCK_BACKUP) {
              console.log("  🔄 Switching to Backup Token...");
+             await wait(30000); // Small cooldown before switch
              buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token');
+
+             // Retry Backup if failed
+             if (!buffer) {
+                console.log("  ⏳ Waiting 60s before retrying Backup Token...");
+                await wait(60000);
+                buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token (Retry)');
+             }
         }
 
         if (!buffer) {
-             throw new Error("All image generation tokens exhausted.");
+             throw new Error("Image generation failed after multiple retries with all tokens.");
         }
 
-        console.log("  ✅ [2/4] Image data received successfully from Hugging Face.");
+        console.log("  ✅ [2/4] Image data received successfully.");
         
         // Step 2: Upload Image
         console.log("  📤 [3/4] Uploading image to ImgBB...");
@@ -149,27 +171,11 @@ async function generateAndUploadImage(prompt) {
             console.log(`  ✅ [4/4] Image uploaded to ImgBB. URL: ${response.data.data.url}`);
             return response.data.data.url;
         } else {
-            // This is a failure case from ImgBB's API
             console.error("  ❌ ImgBB upload API returned an error.");
-            console.error("  📋 ImgBB Response:", response.data);
             return null;
         }
     } catch (error) {
-        // This is a network error or other exception
-        console.error("  ❌ A critical error occurred during the image generation or upload process.");
-        if (error.response) {
-            // The request was made and the server responded with a status code
-            // that falls out of the range of 2xx
-            console.error('  Error Data:', error.response.data);
-            console.error('  Error Status:', error.response.status);
-            console.error('  Error Headers:', error.response.headers);
-        } else if (error.request) {
-            // The request was made but no response was received
-            console.error('  Error Request:', error.request);
-        } else {
-            // Something happened in setting up the request that triggered an Error
-            console.error('  Error Message:', error.message);
-        }
+        console.error("  ❌ Critical error in image workflow:", error.message);
         return null;
     }
 }
@@ -299,7 +305,8 @@ async function runBot() {
 
       for (const item of itemsToProcess) {
         await processArticle(item);
-        await sleep(20000); // 20-second delay
+        console.log("  ⏳ Cooldown: Waiting 60s before next article...");
+        await sleep(60000); // 60-second delay
       }
     } catch (feedError) {
       console.error(`❌ Error processing feed ${feedUrl}:`, feedError.message);
