@@ -96,21 +96,43 @@ function cleanJSON(text) {
 
 async function generateAndUploadImage(prompt) {
     console.log("  🎨 Starting image generation and upload process...");
+
+    async function tryGenerate(token, tokenName) {
+        try {
+            console.log(`  tryGenerate with ${tokenName}...`);
+            const hfClient = new HfInference(token);
+            const result = await hfClient.textToImage({
+                model: "black-forest-labs/FLUX.1-schnell",
+                inputs: prompt,
+                parameters: {
+                    guidance_scale: 0.0,
+                    num_inference_steps: 4,
+                    wait_for_model: true,
+                }
+            });
+            return Buffer.from(await result.arrayBuffer());
+        } catch (err) {
+            console.log(`  ⚠️ ${tokenName} failed: ${err.message}`);
+            return null;
+        }
+    }
+
     try {
         // Step 1: Generate Image
         console.log("  📤 [1/4] Sending request to Hugging Face for image generation...");
-        const result = await hf.textToImage({
-            model: "black-forest-labs/FLUX.1-schnell",
-            inputs: prompt,
-            parameters: {
-                guidance_scale: 0.0,
-                num_inference_steps: 4,
-                wait_for_model: true,
-            }
-        });
-        console.log("  ✅ [2/4] Image data received successfully from Hugging Face.");
+        
+        let buffer = await tryGenerate(process.env.HUGGINGTOCK, 'Primary Token');
+        
+        if (!buffer && process.env.HUGGINGTOCK_BACKUP) {
+             console.log("  🔄 Switching to Backup Token...");
+             buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token');
+        }
 
-        const buffer = Buffer.from(await result.arrayBuffer());
+        if (!buffer) {
+             throw new Error("All image generation tokens exhausted.");
+        }
+
+        console.log("  ✅ [2/4] Image data received successfully from Hugging Face.");
         
         // Step 2: Upload Image
         console.log("  📤 [3/4] Uploading image to ImgBB...");
