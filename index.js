@@ -18,6 +18,7 @@ app.prepare().then(() => {
 
   // Health check for Uptime/Render
   server.get('/health', (req, res) => {
+    console.log('💓 Heartbeat: Uptime check received at', new Date().toISOString());
     res.status(200).send('OK');
   });
 
@@ -45,9 +46,9 @@ app.prepare().then(() => {
   // 🚀 SERVER START & AUTOMATION
   // ---------------------------------------------------------
   
-  server.listen(PORT, (err) => {
+  server.listen(PORT, '0.0.0.0', (err) => {
     if (err) throw err;
-    console.log(`> Ready on port ${PORT}`);
+    console.log(`> 🚀 Server is live and unstoppable on port ${PORT}`);
     
     // 1. Initial run after 1 minute
     console.log('🤖 Scheduling initial bot run in 1 minute...');
