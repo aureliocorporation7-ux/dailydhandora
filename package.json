@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node index.js",
     "lint": "next lint",
     "bot": "node scripts/run-bot.js",
     "cleanup-images": "node scripts/cleanup-images.js"
@@ -13,6 +13,8 @@
     "@google/generative-ai": "latest",
     "@huggingface/inference": "latest",
     "axios": "latest",
+    "dotenv": "latest",
+    "express": "^5.2.1",
     "firebase": "latest",
     "firebase-admin": "latest",
     "form-data": "latest",
@@ -22,9 +24,8 @@
     "react": "latest",
     "react-dom": "latest",
     "rss-parser": "latest",
-    "yargs": "latest",
-    "dotenv": "latest", 
-    "sharp": "latest"
+    "sharp": "latest",
+    "yargs": "latest"
   },
   "devDependencies": {
     "@tailwindcss/typography": "latest",
@@ -35,4 +36,4 @@
   "engines": {
     "node": "20.x"
   }
-} 
+}

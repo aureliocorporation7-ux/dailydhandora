@@ -105,6 +105,7 @@ async function generateAndUploadImage(prompt) {
             parameters: {
                 guidance_scale: 0.0,
                 num_inference_steps: 4,
+                wait_for_model: true,
             }
         });
         console.log("  ✅ [2/4] Image data received successfully from Hugging Face.");
@@ -302,7 +303,12 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error('🔥 Unhandled exception in main execution:', error);
-  process.exit(1);
-});
+module.exports = { runBot, runBotWorkflow: main };
+
+// Only run directly if called via CLI
+if (require.main === module) {
+  main().catch(error => {
+    console.error('🔥 Unhandled exception in main execution:', error);
+    process.exit(1);
+  });
+}
