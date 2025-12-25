@@ -1,39 +1,42 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Dependencies
 /node_modules
 /.pnp
 .pnp.js
 
-# testing
-/coverage
-
-# next.js
+# Next.js
 /.next/
 /out/
 
-# production
+# Production
 /build
+/dist
 
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
+# Environment Variables (IMPORTANT: Never commit secrets)
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.local
 
-# vercel
-.vercel
+# Firebase
+firebase-debug.log
+.firebase/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Local State/Logs
+.rate-limit-state.json
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System Files
+.DS_Store
+Thumbs.db
+*.pem
+
+# Project Specific
 problem.txt
+.vercel/
+scripts/*.bak*
+scripts/*.backup
