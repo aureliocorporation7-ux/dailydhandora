@@ -1,0 +1,1 @@
+require('dotenv').config({ path: '.env.local' }); const { db } = require('../lib/firebase'); async function check() { try { const s = await db.collection('articles').limit(10).get(); console.log('--- CATEGORIES IN DB ---'); s.forEach(d => console.log(d.data().category)); } catch(e) { console.log(e); } } check();

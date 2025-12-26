@@ -59,12 +59,15 @@ Strictly JSON only.
 
 2. **ARTICLE BODY (Hindi):**
     - **Length:** 350-400 words.
-    - **Format:** Use **bold tags** for emphasis. Short paragraphs.
+    - **MANDATORY FORMATTING:** 
+        - NEVER use Markdown (###, **, etc.).
+        - USE HTML ONLY: <p>, <h3>, <strong>, <ul>, <li>.
+        - Wrap EVERY paragraph in <p></p> tags.
     - **Structure:**
-        1. **The Hook (Para 1):** Start with the most impactful detail. 
-        2. **The Deep Dive (<h3> Subheading):** Detailed explanation of the event/topic.
-        3. **Why It Matters (<h3> Subheading):** If Masala: The drama/consequence. If Value: The benefit/impact.
-        4. **Key Takeaways (<ul><li>):** 3-4 bullet points.
+        1. **The Hook (Para 1):** Wrap in <p> tags. Start with the most impactful detail. 
+        2. **The Deep Dive (<h3> Subheading):** Use <h3> tags. Detailed explanation.
+        3. **Why It Matters (<h3> Subheading):** Use <h3> tags. If Masala: The drama/consequence. If Value: The benefit/impact.
+        4. **Key Takeaways (<ul><li>):** Summarize in a bulleted list.
 
 3. **IMAGE PROMPT (English):**
     - **Instruction:** Match the mood. If Masala: High contrast, dramatic lighting, intense expressions. If Value: Clean, modern, vibrant, tech-focused.
@@ -301,6 +304,19 @@ async function processArticle(item, status = 'published', imageGenEnabled = true
       return;
     }
 
+    // --- SAFETY NET: Convert Markdown to HTML if AI messed up ---
+    let formattedContent = aiData.content
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>') // Convert ### to <h3>
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Convert ** to <strong>
+        .replace(/__(.*?)__/g, '<strong>$1</strong>') // Convert __ to <strong>
+        .replace(/^\* (.*$)/gim, '<li>$1</li>') // Convert * item to <li>
+        .replace(/^- (.*$)/gim, '<li>$1</li>'); // Convert - item to <li>
+
+    // Wrap consecutive <li> tags in <ul> (Basic fix)
+    formattedContent = formattedContent.replace(/(<li>.*<\/li>)/gim, '<ul>$1</ul>')
+        .replace(/<\/ul>\s*<ul>/gim, ''); // Merge adjacent lists
+
+
     let finalImageUrl = null;
 
     // Check Global Switch for Image Gen
@@ -318,7 +334,7 @@ async function processArticle(item, status = 'published', imageGenEnabled = true
 
     const dataToSave = {
       headline: aiData.headline,
-      content: aiData.content,
+      content: formattedContent,
       tags: aiData.tags || [],
       category: aiData.category || 'Other',
       sourceUrl: sourceUrl,

@@ -14,13 +14,14 @@ export default async function sitemap() {
   try {
     const snapshot = await db
       .collection('articles')
+      .where('status', '==', 'published') // Only published articles
       .orderBy('createdAt', 'desc')
       .limit(500)
       .get();
 
     const articles = snapshot.docs.map(doc => ({
-      url: 'https://dailydhandora.vercel.app/blog/' + doc.data().slug,
-      lastModified: doc.data().createdAt?.toDate() || new Date(),
+      url: `https://dailydhandora.vercel.app/article/${doc.id}`, // Correct URL pattern
+      lastModified: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(),
       changeFrequency: 'daily',
       priority: 0.8,
     }));
@@ -36,6 +37,7 @@ export default async function sitemap() {
     ];
   } catch (error) {
     console.error('Sitemap generation error:', error);
+    // Return basic sitemap on error to avoid build failure
     return [
       {
         url: 'https://dailydhandora.vercel.app',

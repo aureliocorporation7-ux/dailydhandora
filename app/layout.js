@@ -1,6 +1,8 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { NotificationProvider } from './contexts/NotificationContext';
+import Navbar from './components/layout/Navbar';
+import Footer from './components/layout/Footer';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -23,7 +25,11 @@ export default function RootLayout({ children }) {
       </head>
       <body className={`${inter.className} bg-neutral-950 text-white`} suppressHydrationWarning>
         <NotificationProvider>
-          <main>{children}</main>
+          <Navbar />
+          <main className="min-h-screen">
+            {children}
+          </main>
+          <Footer />
         </NotificationProvider>
       </body>
     </html>

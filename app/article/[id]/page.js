@@ -1,12 +1,14 @@
 import { db } from '@/lib/firebase';
 import ArticleMeta from '@/app/components/ArticleMeta';
+import AudioPlayer from '@/app/components/AudioPlayer';
 import Image from 'next/image';
+import Link from 'next/link';
 
 export const revalidate = 3600; // Revalidate every hour
 
 async function getArticle(id) {
   try {
-    const doc = await db.collection('articles').doc(id).get({ next: { tags: ['collection'] } });
+    const doc = await db.collection('articles').doc(id).get();
     
     if (!doc.exists) {
       return null;
@@ -22,6 +24,32 @@ async function getArticle(id) {
     console.error('Error fetching article:', error);
     return null;
   }
+}
+
+async function getRelatedArticles(category, currentId) {
+    if (!category) return [];
+    try {
+        const snapshot = await db.collection('articles')
+            .where('category', '==', category)
+            .where('status', '==', 'published')
+            .orderBy('createdAt', 'desc')
+            .limit(4) // Fetch 4, we'll likely filter one out
+            .get();
+
+        const articles = snapshot.docs
+            .map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            }))
+            .filter(a => a.id !== currentId) // Exclude current article
+            .slice(0, 3); // Take top 3
+
+        return articles;
+    } catch (error) {
+        console.error('Error fetching related articles:', error);
+        return [];
+    }
 }
 
 export default async function ArticlePage({ params }) {
@@ -42,6 +70,8 @@ export default async function ArticlePage({ params }) {
     );
   }
 
+  const relatedArticles = await getRelatedArticles(article.category, article.id);
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white" suppressHydrationWarning>
       <article className="max-w-4xl mx-auto px-4 py-12">
@@ -55,17 +85,21 @@ export default async function ArticlePage({ params }) {
             priority
           />
         </div>
-        <h1 className="text-4xl font-bold mb-6">{article.headline}</h1>
+
+        <div className="flex justify-between items-start gap-4 mb-6">
+            <h1 className="text-4xl font-bold flex-1">{article.headline}</h1>
+            <div className="flex-shrink-0 pt-1">
+                <AudioPlayer text={article.content} />
+            </div>
+        </div>
         
-
-
         <ArticleMeta category={article.category} createdAt={article.createdAt} />
 
         <div className="prose prose-invert max-w-none">
           <div dangerouslySetInnerHTML={{ __html: article.content }} />
         </div>
 
-        {/* Author Box for AdSense Trust */}
+        {/* Author Box */}
         <div className="mt-12 p-6 bg-neutral-900/50 border border-neutral-800 rounded-xl flex items-center gap-4">
             <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-xl font-bold">
                 D
@@ -87,6 +121,37 @@ export default async function ArticlePage({ params }) {
               </a>
             </p>
           </div>
+        )}
+
+        {/* Related Articles Section */}
+        {relatedArticles.length > 0 && (
+            <div className="mt-16 pt-10 border-t border-neutral-800">
+                <h3 className="text-2xl font-bold text-white mb-6 border-l-4 border-primary pl-3">
+                    संबंधित समाचार (Related News)
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {relatedArticles.map((rel) => (
+                        <Link key={rel.id} href={`/article/${rel.id}`} className="group block bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden hover:border-primary transition-all">
+                            <div className="relative h-40 w-full">
+                                <Image 
+                                    src={rel.imageUrl || '/placeholder.png'} 
+                                    alt={rel.headline} 
+                                    fill 
+                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                />
+                            </div>
+                            <div className="p-4">
+                                <h4 className="text-sm font-bold text-white line-clamp-2 group-hover:text-primary transition-colors">
+                                    {rel.headline}
+                                </h4>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    {new Date(rel.createdAt).toLocaleDateString('hi-IN')}
+                                </p>
+                            </div>
+                        </Link>
+                    ))}
+                </div>
+            </div>
         )}
       </article>
     </div>
