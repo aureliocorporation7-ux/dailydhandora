@@ -1,6 +1,7 @@
 import { db } from '@/lib/firebase';
 import ArticleMeta from '@/app/components/ArticleMeta';
 import AudioPlayer from '@/app/components/AudioPlayer';
+import ArticleActions from '@/app/components/ArticleActions';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -19,6 +20,8 @@ async function getArticle(id) {
       id: doc.id,
       ...data,
       createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      publishedAt: data.publishedAt?.toDate?.()?.toISOString() || null,
+      updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
     };
   } catch (error) {
     console.error('Error fetching article:', error);
@@ -33,7 +36,7 @@ async function getRelatedArticles(category, currentId) {
             .where('category', '==', category)
             .where('status', '==', 'published')
             .orderBy('createdAt', 'desc')
-            .limit(4) // Fetch 4, we'll likely filter one out
+            .limit(4)
             .get();
 
         const articles = snapshot.docs
@@ -42,8 +45,8 @@ async function getRelatedArticles(category, currentId) {
                 ...doc.data(),
                 createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
             }))
-            .filter(a => a.id !== currentId) // Exclude current article
-            .slice(0, 3); // Take top 3
+            .filter(a => a.id !== currentId)
+            .slice(0, 3);
 
         return articles;
     } catch (error) {
@@ -70,6 +73,7 @@ export default async function ArticlePage({ params }) {
     );
   }
 
+  // Safe to call now because article exists
   const relatedArticles = await getRelatedArticles(article.category, article.id);
 
   return (
@@ -99,12 +103,17 @@ export default async function ArticlePage({ params }) {
           <div dangerouslySetInnerHTML={{ __html: article.content }} />
         </div>
 
+        {/* Action Buttons (Comments) after content */}
+        <div className="flex justify-end mt-6">
+            <ArticleActions articleId={article.id} />
+        </div>
+
         {/* Author Box */}
-        <div className="mt-12 p-6 bg-neutral-900/50 border border-neutral-800 rounded-xl flex items-center gap-4">
-            <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-xl font-bold">
+        <div className="mt-12 p-6 bg-neutral-900/50 border border-neutral-800 rounded-xl flex items-start gap-4">
+            <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0">
                 D
             </div>
-            <div>
+            <div className="flex-1">
                 <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-0.5">Written By</p>
                 <h3 className="text-lg font-bold text-white">{article.author || 'Daily Dhandora Desk'}</h3>
                 <p className="text-xs text-gray-500 mt-1">
@@ -153,6 +162,7 @@ export default async function ArticlePage({ params }) {
                 </div>
             </div>
         )}
+
       </article>
     </div>
   );
