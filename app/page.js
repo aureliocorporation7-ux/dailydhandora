@@ -7,7 +7,11 @@ export const revalidate = 0;
 
 async function getArticles() {
   try {
-    const snapshot = await db.collection('articles').orderBy('createdAt', 'desc').limit(20).get();
+    const snapshot = await db.collection('articles')
+      .where('status', '==', 'published')
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
     
     const newsData = snapshot.docs.map(doc => {
       const data = doc.data();

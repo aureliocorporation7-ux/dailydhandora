@@ -14,7 +14,10 @@ const { HfInference } = require('@huggingface/inference');
 const FormData = require('form-data');
 const fs = require('fs');
 
-const LOCAL_PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const FALLBACK_IMAGES = [
+  'https://i.ibb.co/WvyBzwjt/Gemini-Generated-Image-q955oqq955oqq955.png',
+  'https://i.ibb.co/fYWK9psQ/Gemini-Generated-Image-d9qtrld9qtrld9qt.png'
+];
 
 // Initialize Clients
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -23,58 +26,59 @@ const hf = new HfInference(process.env.HUGGINGTOCK);
 const IMGBB_KEY = process.env.IMGBB;
 
 const RSS_FEEDS = [
-  'https://news.google.com/rss/search?q=when:24h+allinurl:timesofindia.com&ceid=IN:en&hl=en-IN',
-  'https://news.google.com/rss/topics/CAAqJQgKIh9DQkFTRVFvSUwyMHZNRFZ4ZERBU0JXVnVMVWRDS0FBUAE?ceid=IN:en&hl=en-IN'
+  'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en', // Top Stories
+  'https://news.google.com/rss/search?q=India+startups+business+when:24h&hl=en-IN&gl=IN&ceid=IN:en', // Startups & Economy
+  'https://news.google.com/rss/search?q=India+technology+gadgets+when:24h&hl=en-IN&gl=IN&ceid=IN:en', // Tech
+  'https://news.google.com/rss/search?q=ISRO+science+innovation+India+when:24h&hl=en-IN&gl=IN&ceid=IN:en', // Science & Innovation
+  'https://news.google.com/rss/search?q=Education+Jobs+Career+India+when:24h&hl=en-IN&gl=IN&ceid=IN:en' // Utility/Education
 ];
 
 const SYSTEM_PROMPT = `
-You are a Viral News Editor for a top-tier Indian news portal, known for your ability to write compelling headlines and engaging stories that people love to read and share.
-Your primary goal is to maximize reader engagement (CTR) by creating a sense of curiosity and urgency, without resorting to repetitive or generic clickbait.
+You are the "Master Editor" for DailyDhandora, a high-traffic Indian news portal. Your superpower is **Adaptability**. You know exactly when to be spicy and when to be smart.
+
+### YOUR DUAL PERSONALITY:
+1.  **THE MASALA EDITOR (For Politics, Crime, Entertainment, Viral Trends):**
+    *   **Goal:** Maximum CTR. Stop the scroll!
+    *   **Tone:** Dramatic, urgent, and high-energy. Use emotional hooks like shock, curiosity, or pride.
+    *   **Style:** "Spicy & Bold." Think like a top TV news anchor.
+
+2.  **THE VALUE EDITOR (For Tech, Startups, Education, Science, Finance):**
+    *   **Goal:** High Utility. Make the reader smarter.
+    *   **Tone:** Intelligent, professional, and helpful. 
+    *   **Style:** "Smart & Crisp." Like a trusted expert friend.
 
 ### OUTPUT FORMAT:
 Strictly JSON only.
 
 ### TASKS:
 
-1. **HEADLINE (Hindi - THE ART OF THE CLICK):**
-   - **Goal:** Create a unique, powerful headline that stops the scroll. It should feel urgent and important.
-   - **Technique:** Use curiosity, surprise, or a strong emotional hook. Think like a master copywriter.
-   - **Creative Patterns (use variety, don't repeat the same style):**
-     - Question-based: "[Person] ने उठाया बड़ा कदम, क्या है इसके पीछे की वजह?"
-     - Consequence-focused: "[Event] के बाद बदल गए समीकरण, अब क्या होगा आगे?"
-     - Reveal-style: "खुलासा: [Topic] पर सामने आई वो रिपोर्ट, जिसे सब जानना चाहते हैं।"
-     - Direct & Punchy: "[News] को लेकर सरकार का बड़ा ऐलान, आम आदमी पर होगा सीधा असर।"
-   - **Constraint:** < 15 words. Must be dramatic but 100% factual.
-   - **NEGATIVE CONSTRAINT:** Avoid using "बड़ा झटका" or "मचा हड़कंप" in every headline. Use them only when truly appropriate for major breaking news.
+1. **HEADLINE (Hindi - THE HOOK):**
+    - **If Masala:** Use powerful words. (e.g., "खलबली", "बड़ा खुलासा", "समीकरण बदले", "हैरान करने वाला")
+    - **If Value:** Use benefit-driven words. (e.g., "बड़ी राहत", "खुशखबरी", "बदल जाएगी दुनिया", "कमाई का मौका")
+    - **Constraint:** < 15 words. Dramatic but 100% factual.
 
-2. **ARTICLE BODY (Hindi - ENGAGEMENT FOCUSED):**
-   - **Length:** 400-500 words(Crisp & Spicy).
-   - **Tone:** Conversational, informative, and urgent. (Like an expert friend explaining something important).
-   - **Formatting:**
-     - Use **bold tags** (<strong>text</strong>) for key names, places, and numbers.
-     - Short paragraphs (2-3 lines max) for easy mobile reading.
-   - **Structure:**
-     1. **The Hook (Para 1):** Start with the most impactful detail. Answer "What's the most surprising part of this news?" in the first line.
-     2. **The Inside Story (<h3> Subheading):** Explain the core event. What, why, and how it happened.
-     3. **Why It Matters (<h3> Subheading):** Explain the impact on the reader or the country.
-     4. **Key Highlights (<ul><li>):** Summarize the 3 most important takeaways in bullet points.
-   - **Constraint:** Every sentence should add value. No filler content.
+2. **ARTICLE BODY (Hindi):**
+    - **Length:** 350-400 words.
+    - **Format:** Use **bold tags** for emphasis. Short paragraphs.
+    - **Structure:**
+        1. **The Hook (Para 1):** Start with the most impactful detail. 
+        2. **The Deep Dive (<h3> Subheading):** Detailed explanation of the event/topic.
+        3. **Why It Matters (<h3> Subheading):** If Masala: The drama/consequence. If Value: The benefit/impact.
+        4. **Key Takeaways (<ul><li>):** 3-4 bullet points.
 
 3. **IMAGE PROMPT (English):**
-   - **Subject:** Capture the core emotion or action of the story. Focus on expressions, environment, and mood.
-   - **Style:** "Cinematic, photorealistic, 8k, high contrast, dramatic lighting, press photography style".
-   - **Instruction:** If a person is central, start with "Dramatic close-up portrait of...". If it's an event, start with "Cinematic action shot of...".
+    - **Instruction:** Match the mood. If Masala: High contrast, dramatic lighting, intense expressions. If Value: Clean, modern, vibrant, tech-focused.
 
-4. **TAGS:** 5 relevant and trending tags (Hindi or English).
-5. **CATEGORY:** A single, relevant category (e.g., राजनीति, खेल, तकनीक).
+4. **TAGS:** 5 relevant tags.
+5. **CATEGORY:** One of (राजनीति, मनोरंजन, तकनीक, स्टार्टअप, शिक्षा, विज्ञान, व्यापार, अन्य).
 
-### JSON STRUCTURE EXAMPLE:
+### JSON STRUCTURE:
 {
-  "headline": "क्या सच में बदल जाएगा [Something]? सरकार ने लिया बड़ा फैसला!",
-  "content": "<p><strong>[City/Context]</strong>: एक ऐसी खबर सामने आई है जिसने सभी का ध्यान खींच लिया है।...</p><h3>क्या है पूरा मामला?</h3><p>सूत्रों के अनुसार, <strong>[Name]</strong> ने...</p><h3>इसका क्या असर होगा?</h3><p>जानकारों का मानना है कि...</p><ul><li>मुख्य बिंदु 1</li><li>मुख्य बिंदु 2</li><li>मुख्य बिंदु 3</li></ul>",
-  "image_prompt": "Dramatic close-up portrait of a concerned politician looking at official documents, cinematic lighting, 8k, photorealistic.",
-  "tags": ["#tag1", "#tag2", "#tag3"],
-  "category": "राजनीति"
+  "headline": "...",
+  "content": "...",
+  "image_prompt": "...",
+  "tags": ["..."],
+  "category": "..."
 }
 `;
 
@@ -99,7 +103,7 @@ async function generateAndUploadImage(prompt) {
 
     async function tryGenerate(token, tokenName) {
         try {
-            console.log(`  tryGenerate with ${tokenName}...`);
+            console.log(`  👉 Attempting with ${tokenName}...`);
             const hfClient = new HfInference(token);
             const result = await hfClient.textToImage({
                 model: "black-forest-labs/FLUX.1-schnell",
@@ -110,9 +114,14 @@ async function generateAndUploadImage(prompt) {
                     wait_for_model: true,
                 }
             });
-            return Buffer.from(await result.arrayBuffer());
+            const buffer = Buffer.from(await result.arrayBuffer());
+            if (buffer && buffer.length > 0) {
+                console.log(`  ✅ SUCCESS: Image generated using [${tokenName}]`);
+                return buffer;
+            }
+            throw new Error("Empty buffer received");
         } catch (err) {
-            console.log(`  ⚠️ ${tokenName} failed: ${err.message}`);
+            console.log(`  ⚠️  FAILED: ${tokenName} - ${err.message}`);
             return null;
         }
     }
@@ -121,55 +130,51 @@ async function generateAndUploadImage(prompt) {
     const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     try {
-        console.log("  📤 [1/4] Sending request to Hugging Face for image generation...");
         let buffer = null;
 
-        // 1. Try Primary Token
+        // --- TIER 1: Primary Token ---
         if (process.env.HUGGINGTOCK) {
-            buffer = await tryGenerate(process.env.HUGGINGTOCK, 'Primary Token');
+            buffer = await tryGenerate(process.env.HUGGINGTOCK, 'HUGGINGTOCK (Primary)');
             
-            // Retry Primary if failed (likely rate limit)
             if (!buffer) {
-                console.log("  ⏳ Waiting 60s before retrying Primary Token...");
-                await wait(60000);
-                buffer = await tryGenerate(process.env.HUGGINGTOCK, 'Primary Token (Retry)');
+                console.log("  ⏳ Waiting 10s before retrying Primary...");
+                await wait(10000);
+                buffer = await tryGenerate(process.env.HUGGINGTOCK, 'HUGGINGTOCK (Primary Retry)');
             }
         }
 
-        // 2. Try Backup Token 1 if Primary failed twice
+        // --- TIER 2: Backup Token 1 ---
         if (!buffer && process.env.HUGGINGTOCK_BACKUP) {
-             console.log("  🔄 Switching to Backup Token 1...");
-             await wait(30000); 
-             buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token 1');
+             console.log("  🔻 Switching to Fallback Level 1...");
+             await wait(5000); 
+             buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'HUGGINGTOCK_BACKUP');
 
              if (!buffer) {
-                console.log("  ⏳ Waiting 60s before retrying Backup Token 1...");
-                await wait(60000);
-                buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'Backup Token 1 (Retry)');
+                console.log("  ⏳ Waiting 10s before retrying Backup 1...");
+                await wait(10000);
+                buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP, 'HUGGINGTOCK_BACKUP (Retry)');
              }
         }
 
-        // 3. Try Backup Token 2 if Backup 1 failed twice
+        // --- TIER 3: Backup Token 2 ---
         if (!buffer && process.env.HUGGINGTOCK_BACKUP2) {
-             console.log("  🔄 Switching to Backup Token 2...");
-             await wait(30000);
-             buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP2, 'Backup Token 2');
+             console.log("  🔻 Switching to Fallback Level 2...");
+             await wait(5000);
+             buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP2, 'HUGGINGTOCK_BACKUP2');
 
              if (!buffer) {
-                console.log("  ⏳ Waiting 60s before retrying Backup Token 2...");
-                await wait(60000);
-                buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP2, 'Backup Token 2 (Retry)');
+                console.log("  ⏳ Waiting 10s before retrying Backup 2...");
+                await wait(10000);
+                buffer = await tryGenerate(process.env.HUGGINGTOCK_BACKUP2, 'HUGGINGTOCK_BACKUP2 (Retry)');
              }
         }
 
         if (!buffer) {
-             throw new Error("Image generation failed after multiple retries with all tokens.");
+             throw new Error("❌ ALL image generation tokens failed.");
         }
 
-        console.log("  ✅ [2/4] Image data received successfully.");
-        
         // Step 2: Upload Image
-        console.log("  📤 [3/4] Uploading image to ImgBB...");
+        console.log("  📤 Uploading image to ImgBB...");
         const form = new FormData();
         form.append('image', buffer.toString('base64'));
 
@@ -180,7 +185,7 @@ async function generateAndUploadImage(prompt) {
         });
 
         if (response.data.success) {
-            console.log(`  ✅ [4/4] Image uploaded to ImgBB. URL: ${response.data.data.url}`);
+            console.log(`  🎉 Image uploaded successfully! URL: ${response.data.data.url}`);
             return response.data.data.url;
         } else {
             console.error("  ❌ ImgBB upload API returned an error.");
@@ -205,25 +210,68 @@ async function checkDuplicate(headline, sourceUrl) {
   return false;
 }
 
-async function generateContent(articleText) {
-  const model = "moonshotai/kimi-k2-instruct-0905";
-  console.log(`  🤖 Generating content with model: ${model}`);
-  try {
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: articleText }],
-      model: model,
-      response_format: { type: "json_object" }
-    });
-    const content = completion.choices[0].message.content;
-    const cleaned = cleanJSON(content);
-    return JSON.parse(cleaned);
-  } catch (e) {
-    console.error('  ❌ Groq API error:', e.message);
-    return null;
-  }
+async function generateContent(headline) {
+    const geminiModels = [
+        'gemini-3-pro-preview',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite'
+    ];
+
+    // Helper: Try generating with a specific Gemini model
+    async function tryGemini(modelName) {
+        console.log(`  🤖 Attempting with Gemini Model: ${modelName}...`);
+        try {
+            const model = genAI.getGenerativeModel({ 
+                model: modelName,
+                systemInstruction: SYSTEM_PROMPT
+            });
+
+            const result = await model.generateContent(headline);
+            const response = await result.response;
+            const text = response.text();
+            
+            if (!text) throw new Error("Empty response from Gemini");
+
+            const cleaned = cleanJSON(text);
+            const parsed = JSON.parse(cleaned);
+            console.log(`  ✅ SUCCESS: Content generated using [${modelName}]`);
+            return parsed;
+        } catch (error) {
+            console.log(`  ⚠️  FAILED: ${modelName} - ${error.message}`);
+            return null;
+        }
+    }
+
+    // 1. Try Gemini Models in sequence
+    for (const modelName of geminiModels) {
+        const data = await tryGemini(modelName);
+        if (data && data.headline && data.content) {
+            return data;
+        }
+        // If failed, loop continues to next model
+    }
+
+    // 2. Final Fallback: Groq
+    console.log('  🔻 All Gemini models failed. Switching to Ultimate Fallback: Groq...');
+    const model = "moonshotai/kimi-k2-instruct-0905";
+    try {
+        const completion = await groq.chat.completions.create({
+            messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: headline }],
+            model: model,
+            response_format: { type: "json_object" }
+        });
+        const content = completion.choices[0].message.content;
+        const cleaned = cleanJSON(content);
+        const parsed = JSON.parse(cleaned);
+        console.log(`  ✅ SUCCESS: Content generated using [Groq - ${model}]`);
+        return parsed;
+    } catch (e) {
+        console.error('  ❌ CRITICAL: Groq also failed:', e.message);
+        return null;
+    }
 }
 
-async function processArticle(item) {
+async function processArticle(item, status = 'published') {
   const headline = item.title;
   const sourceUrl = item.link;
   const preview = headline.length > 60 ? `${headline.substring(0, 60)}...` : headline;
@@ -252,8 +300,9 @@ async function processArticle(item) {
     }
 
     if (!finalImageUrl) {
-      console.log('  🔄 Falling back to local placeholder image...');
-      finalImageUrl = LOCAL_PLACEHOLDER_IMAGE;
+      console.log('  🔄 All AI Generation failed. Using Emergency Fallback Image...');
+      // Pick a random fallback image
+      finalImageUrl = FALLBACK_IMAGES[Math.floor(Math.random() * FALLBACK_IMAGES.length)];
     }
 
     const dataToSave = {
@@ -264,11 +313,12 @@ async function processArticle(item) {
       sourceUrl: sourceUrl,
       imageUrl: finalImageUrl,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      views: 0
+      views: 0,
+      status: status // 'published' or 'draft'
     };
 
     const docRef = await db.collection('articles').add(dataToSave);
-    console.log(`✅ Saved: ${aiData.headline.substring(0, 60)}... (ID: ${docRef.id})`);
+    console.log(`✅ Saved [${status.toUpperCase()}]: ${aiData.headline.substring(0, 60)}... (ID: ${docRef.id})`);
     processedCount++;
   } catch (error) {
     console.error(`  ❌ Failed to process article "${headline}":`, error.message);
@@ -307,18 +357,52 @@ async function triggerRevalidation() {
 async function runBot() {
   console.log('🤖 Starting DailyDhandora News Bot at:', new Date().toISOString());
 
+  // 1. CHECK GLOBAL SETTINGS (The Master Switch)
+  let botMode = 'auto'; // Default
+  try {
+    const settingsDoc = await db.collection('settings').doc('global').get();
+    if (settingsDoc.exists) {
+        botMode = settingsDoc.data().botMode || 'auto';
+    } else {
+        // Initialize if not exists
+        await db.collection('settings').doc('global').set({ botMode: 'auto' });
+        console.log("  ⚙️  Initialized Global Settings to 'auto'");
+    }
+  } catch (err) {
+      console.error("  ⚠️  Could not fetch settings, defaulting to AUTO mode.", err.message);
+  }
+
+  console.log(`  🎛️  CURRENT MODE: [ ${botMode.toUpperCase()} ]`);
+
+  // --- MODE: OFF ---
+  if (botMode === 'off') {
+      console.log("  🔴 Kill Switch is ACTIVE. Bot is sleeping. Bye!");
+      return;
+  }
+
+  // --- MODE: MANUAL/AUTO ---
+  const articleStatus = (botMode === 'manual') ? 'draft' : 'published';
+  if (botMode === 'manual') {
+      console.log("  🟡 Manual Mode: Articles will be saved as DRAFTS for review.");
+  } else {
+      console.log("  🟢 Auto Mode: Articles will be PUBLISHED immediately.");
+  }
+
   for (const feedUrl of RSS_FEEDS) {
     console.log(`
 📡 Fetching RSS feed: ${feedUrl}`);
     try {
       const feed = await parser.parseURL(feedUrl);
       console.log(`✅ Found ${feed.items.length} articles in feed`);
-      const itemsToProcess = feed.items.slice(0, 5);
+      
+      // Smart Volume Control: Only process top 1 per feed to prevent spam
+      const itemsToProcess = feed.items.slice(0, 1);
 
       for (const item of itemsToProcess) {
-        await processArticle(item);
+        // Pass the status to processArticle
+        await processArticle(item, articleStatus);
         console.log("  ⏳ Cooldown: Waiting 60s before next article...");
-        await sleep(60000); // 60-second delay
+        await sleep(60000); 
       }
     } catch (feedError) {
       console.error(`❌ Error processing feed ${feedUrl}:`, feedError.message);
