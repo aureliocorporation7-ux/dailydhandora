@@ -65,6 +65,20 @@ export default async function ArticlePage({ params }) {
           <div dangerouslySetInnerHTML={{ __html: article.content }} />
         </div>
 
+        {/* Author Box for AdSense Trust */}
+        <div className="mt-12 p-6 bg-neutral-900/50 border border-neutral-800 rounded-xl flex items-center gap-4">
+            <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-xl font-bold">
+                D
+            </div>
+            <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wider font-bold mb-0.5">Written By</p>
+                <h3 className="text-lg font-bold text-white">{article.author || 'Daily Dhandora Desk'}</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                    Providing accurate, unbiased, and timely news updates for the people of India.
+                </p>
+            </div>
+        </div>
+
         {article.source && (
           <div className="mt-8 pt-8 border-t border-gray-800">
             <p className="text-sm text-gray-500">

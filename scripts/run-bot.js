@@ -237,7 +237,15 @@ async function generateContent(headline) {
             console.log(`  ✅ SUCCESS: Content generated using [${modelName}]`);
             return parsed;
         } catch (error) {
-            console.log(`  ⚠️  FAILED: ${modelName} - ${error.message}`);
+            let errorMsg = error.message;
+            
+            // Clean up Rate Limit errors
+            if (errorMsg.includes('429') || errorMsg.includes('Quota') || errorMsg.includes('quota')) {
+                console.log(`  ⚠️  FAILED: ${modelName} - Rate Limit Exceeded (429). Switching to next...`);
+            } else {
+                // Keep other errors concise
+                console.log(`  ⚠️  FAILED: ${modelName} - ${errorMsg.split('\n')[0].substring(0, 100)}...`);
+            }
             return null;
         }
     }
@@ -271,7 +279,7 @@ async function generateContent(headline) {
     }
 }
 
-async function processArticle(item, status = 'published') {
+async function processArticle(item, status = 'published', imageGenEnabled = true) {
   const headline = item.title;
   const sourceUrl = item.link;
   const preview = headline.length > 60 ? `${headline.substring(0, 60)}...` : headline;
@@ -295,12 +303,15 @@ async function processArticle(item, status = 'published') {
 
     let finalImageUrl = null;
 
-    if (aiData.image_prompt) {
+    // Check Global Switch for Image Gen
+    if (imageGenEnabled && aiData.image_prompt) {
         finalImageUrl = await generateAndUploadImage(aiData.image_prompt);
+    } else if (!imageGenEnabled) {
+        console.log("  🛑 Image Gen DISABLED in settings. Skipping AI generation.");
     }
 
     if (!finalImageUrl) {
-      console.log('  🔄 All AI Generation failed. Using Emergency Fallback Image...');
+      console.log('  🔄 Using Fallback Image (Scenario: AI Failed OR Disabled)...');
       // Pick a random fallback image
       finalImageUrl = FALLBACK_IMAGES[Math.floor(Math.random() * FALLBACK_IMAGES.length)];
     }
@@ -314,7 +325,8 @@ async function processArticle(item, status = 'published') {
       imageUrl: finalImageUrl,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       views: 0,
-      status: status // 'published' or 'draft'
+      status: status, // 'published' or 'draft'
+      author: 'Daily Dhandora Desk' // Added for AdSense Trust
     };
 
     const docRef = await db.collection('articles').add(dataToSave);
@@ -359,20 +371,24 @@ async function runBot() {
 
   // 1. CHECK GLOBAL SETTINGS (The Master Switch)
   let botMode = 'auto'; // Default
+  let imageGenEnabled = true; // Default
+
   try {
     const settingsDoc = await db.collection('settings').doc('global').get();
     if (settingsDoc.exists) {
-        botMode = settingsDoc.data().botMode || 'auto';
+        const data = settingsDoc.data();
+        botMode = data.botMode || 'auto';
+        imageGenEnabled = data.imageGenEnabled !== false; // Default true
     } else {
         // Initialize if not exists
-        await db.collection('settings').doc('global').set({ botMode: 'auto' });
-        console.log("  ⚙️  Initialized Global Settings to 'auto'");
+        await db.collection('settings').doc('global').set({ botMode: 'auto', imageGenEnabled: true });
+        console.log("  ⚙️  Initialized Global Settings");
     }
   } catch (err) {
       console.error("  ⚠️  Could not fetch settings, defaulting to AUTO mode.", err.message);
   }
 
-  console.log(`  🎛️  CURRENT MODE: [ ${botMode.toUpperCase()} ]`);
+  console.log(`  🎛️  CURRENT MODE: [ ${botMode.toUpperCase()} ] | 🖼️  IMAGE GEN: [ ${imageGenEnabled ? 'ON' : 'OFF'} ]`);
 
   // --- MODE: OFF ---
   if (botMode === 'off') {
@@ -399,8 +415,8 @@ async function runBot() {
       const itemsToProcess = feed.items.slice(0, 1);
 
       for (const item of itemsToProcess) {
-        // Pass the status to processArticle
-        await processArticle(item, articleStatus);
+        // Pass the status and imageGen flag to processArticle
+        await processArticle(item, articleStatus, imageGenEnabled);
         console.log("  ⏳ Cooldown: Waiting 60s before next article...");
         await sleep(60000); 
       }

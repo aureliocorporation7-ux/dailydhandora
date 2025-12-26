@@ -1,8 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client'; // ← FIXED: Use client SDK
+import { collection, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore'; // Import 'where'
+import { db } from '@/lib/firebase-client'; 
 
 const NotificationContext = createContext();
 
@@ -34,6 +34,7 @@ export function NotificationProvider({ children }) {
     const articlesRef = collection(db, 'articles');
     const q = query(
       articlesRef,
+      where('status', '==', 'published'), // Filter by published status
       orderBy('createdAt', 'desc'),
       limit(20)
     );
