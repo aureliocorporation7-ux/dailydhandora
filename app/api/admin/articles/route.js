@@ -31,6 +31,38 @@ export async function GET(request) {
   }
 }
 
+// POST: Create a new article
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    const { headline, content, imageUrl, category, status } = body;
+
+    if (!headline || !content) {
+        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const newArticle = {
+        headline,
+        content,
+        imageUrl: imageUrl || 'https://placehold.co/600x400/000000/FFFFFF/png?text=DailyDhandora',
+        category: category || 'Other',
+        status: status || 'published',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        publishedAt: status === 'published' ? new Date() : null,
+        author: 'Admin (Manual)', // Mark as manually created
+        views: 0,
+        sourceUrl: 'https://dailydhandora.com' // Internal source
+    };
+
+    const docRef = await db.collection('articles').add(newArticle);
+    return NextResponse.json({ success: true, id: docRef.id });
+
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 // PUT: Update or Publish an article
 export async function PUT(request) {
   try {
