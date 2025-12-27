@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { getCategoryFallback } from '@/lib/stockImages';
 
 export default function ArticleCard({ article, index, isFeatured = false, priority = false }) {
   const [timeAgo, setTimeAgo] = useState('');
-  const [imgSrc, setImgSrc] = useState(article.imageUrl);
+  const [imgSrc, setImgSrc] = useState(article.imageUrl || getCategoryFallback(article.category));
+  const [hasTriedFallback, setHasTriedFallback] = useState(false);
 
   useEffect(() => {
     const getTimeAgo = (dateString) => {
@@ -33,6 +35,15 @@ export default function ArticleCard({ article, index, isFeatured = false, priori
     }
   };
 
+  const handleError = () => {
+    if (!hasTriedFallback) {
+      setImgSrc(getCategoryFallback(article.category));
+      setHasTriedFallback(true);
+    } else {
+      setImgSrc('https://placehold.co/600x400/000000/FFFFFF/png?text=Image+Not+Found');
+    }
+  };
+
   const headlineSize = isFeatured ? 'text-xl' : 'text-base';
 
   return (
@@ -49,7 +60,7 @@ export default function ArticleCard({ article, index, isFeatured = false, priori
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           quality={isFeatured ? 75 : 50}
           priority={priority}
-          onError={() => setImgSrc('https://placehold.co/600x400/000000/FFFFFF/png?text=Image+Not+Found')}
+          onError={handleError}
         />
       </div>
       <div className="p-3 pt-1">
