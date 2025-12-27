@@ -14,16 +14,21 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: HEADERS });
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
-    // 1. Fetch top 5 published articles
+    // 1. Get Host and Protocol dynamically
+    const host = request.headers.get('host');
+    const protocol = request.headers.get('x-forwarded-proto') || 'https';
+    const baseUrl = `${protocol}://${host}`;
+
+    // 2. Fetch top 5 published articles
     const snapshot = await db.collection('articles')
       .where('status', '==', 'published')
       .orderBy('createdAt', 'desc')
       .limit(5)
       .get();
 
-    // 2. Transform the data
+    // 3. Transform the data
     const news = snapshot.docs.map(doc => {
       const data = doc.data();
       
@@ -36,7 +41,7 @@ export async function GET() {
       return {
         title: data.headline || 'No Title',
         summary: summary,
-        link: `https://dailydhandora.com/article/${doc.id}`,
+        link: `${baseUrl}/article/${doc.id}`,
         imageUrl: data.imageUrl || '',
         publishedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       };
