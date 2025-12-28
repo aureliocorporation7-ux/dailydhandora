@@ -7,9 +7,12 @@ export default function Footer() {
         
         {/* Column 1: Brand */}
         <div className="col-span-1 md:col-span-2">
-          <h2 className="text-2xl font-bold text-white mb-4">DailyDhandora</h2>
-          <p className="text-sm leading-relaxed mb-4 max-w-sm">
-            DailyDhandora is India's next-gen digital news platform, bringing you the latest stories with a focus on utility, facts, and speed. We cut through the noise.
+          <Link href="/" className="inline-block">
+            <h2 className="text-2xl font-bold text-white mb-2">DailyDhandora</h2>
+            <p className="text-[10px] text-primary uppercase tracking-widest font-bold mb-4">नागौर का अपना डिजिटल पोर्टल</p>
+          </Link>
+          <p className="text-sm leading-relaxed mb-6 max-w-sm text-gray-400">
+            डेली ढिंढोरा (DailyDhandora) नागौर और राजस्थान की सबसे विश्वसनीय डिजिटल न्यूज़ वेबसाइट है। हम आपको मंडी भाव, सरकारी योजनाएं, और स्थानीय खबरें सबसे पहले और सटीक रूप में पहुँचाते हैं।
           </p>
           <div className="flex gap-4">
             {/* Social Icons Placeholders */}

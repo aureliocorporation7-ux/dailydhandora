@@ -6,6 +6,7 @@ if (process.env.CI) {
 }
 
 const { db, admin } = require('../lib/firebase');
+const { getCategoryFallback } = require('../lib/stockImages');
 const Parser = require('rss-parser');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Groq = require('groq-sdk');
@@ -14,11 +15,6 @@ const { HfInference } = require('@huggingface/inference');
 const FormData = require('form-data');
 const fs = require('fs');
 
-const FALLBACK_IMAGES = [
-  'https://i.ibb.co/WvyBzwjt/Gemini-Generated-Image-q955oqq955oqq955.png',
-  'https://i.ibb.co/fYWK9psQ/Gemini-Generated-Image-d9qtrld9qtrld9qt.png'
-];
-
 // Initialize Clients
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const groq = new Groq({ apiKey: process.env.GOD_API_KEY });
@@ -26,54 +22,62 @@ const hf = new HfInference(process.env.HUGGINGTOCK);
 const IMGBB_KEY = process.env.IMGBB;
 
 const RSS_FEEDS = [
-  'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en', // Top Stories
-  'https://news.google.com/rss/search?q=India+startups+business+when:24h&hl=en-IN&gl=IN&ceid=IN:en', // Startups & Economy
-  'https://news.google.com/rss/search?q=India+technology+gadgets+when:24h&hl=en-IN&gl=IN&ceid=IN:en', // Tech
-  'https://news.google.com/rss/search?q=ISRO+science+innovation+India+when:24h&hl=en-IN&gl=IN&ceid=IN:en', // Science & Innovation
-  'https://news.google.com/rss/search?q=Education+Jobs+Career+India+when:24h&hl=en-IN&gl=IN&ceid=IN:en' // Utility/Education
+  'https://news.google.com/rss/search?q=Nagaur+Mandi+Bhav+Merta+when:24h&hl=hi&gl=IN&ceid=IN:hi', // 🌾 Nagaur/Merta Mandi (Fresh Only)
+  'https://news.google.com/rss/search?q=Nagaur+Local+News+Rajasthan+when:24h&hl=hi&gl=IN&ceid=IN:hi', // 📍 Nagaur Local (Fresh Only)
+  'https://news.google.com/rss/search?q=Rajasthan+Sarkari+Yojana+Update+when:24h&hl=hi&gl=IN&ceid=IN:hi', // 🏛️ Rajasthan Schemes (Fresh Only)
+  'https://news.google.com/rss/search?q=Rajasthan+Sarkari+Naukri+Recruitment+when:24h&hl=hi&gl=IN&ceid=IN:hi', // 🎓 Rajasthan Jobs (Fresh Only)
+  'https://news.google.com/rss/search?q=Rajasthan+Weather+Alert+Farming+when:24h&hl=hi&gl=IN&ceid=IN:hi' // 🌦️ Weather (Fresh Only)
 ];
 
 const SYSTEM_PROMPT = `
-You are the "Master Editor" for DailyDhandora, a high-traffic Indian news portal. Your superpower is **Adaptability**. You know exactly when to be spicy and when to be smart.
+You are the "Master Editor" for DailyDhandora, specializing in **Nagaur & Rajasthan Rural Utility & News**. Your goal is to be the #1 trusted source for Nagaur's farmers, students, and villagers.
 
-### YOUR DUAL PERSONALITY:
-1.  **THE MASALA EDITOR (For Politics, Crime, Entertainment, Viral Trends):**
-    *   **Goal:** Maximum CTR. Stop the scroll!
-    *   **Tone:** Dramatic, urgent, and high-energy. Use emotional hooks like shock, curiosity, or pride.
-    *   **Style:** "Spicy & Bold." Think like a top TV news anchor.
+**CRITICAL INSTRUCTION: You MUST provide the output strictly in JSON format.**
 
-2.  **THE VALUE EDITOR (For Tech, Startups, Education, Science, Finance):**
-    *   **Goal:** High Utility. Make the reader smarter.
-    *   **Tone:** Intelligent, professional, and helpful. 
-    *   **Style:** "Smart & Crisp." Like a trusted expert friend.
+### YOUR LOCAL PERSONA:
+
+1.  **THE NAGAUR & RAJASTHAN EXPERT:** 🌾
+    *   **Goal:** Provide accurate crop rates (especially for Nagaur Mandi - Moong, Jeera, Mustard) and local news.
+    *   **Tone:** Helpful, local, and grounded. Use terms like "नागौर के किसान भाई", "मंडी आवक", "तेजी-मंदी".
+    *   **Style:** Clear tables or lists for rates. Mention Nagaur specifically whenever relevant.
+
+2.  **THE RAJASTHAN CAREER GUIDE:** 🎓
+    *   **Goal:** Update on REET, Rajasthan Police, CET, and other state exams.
+    *   **Tone:** Encouraging and informative.
+
+3.  **THE SCHEME HELPER:** 🏛️
+    *   **Goal:** Explain Rajasthan State Govt schemes (e.g., Chiranjeevi, Annapurna, Free Mobile).
 
 ### OUTPUT FORMAT:
-Strictly JSON only.
+**Strictly JSON only.** Do not output any markdown code blocks like \`\`\`json. Just the raw JSON object.
 
 ### TASKS:
 
-1. **HEADLINE (Hindi - THE HOOK):**
-    - **If Masala:** Use powerful words. (e.g., "खलबली", "बड़ा खुलासा", "समीकरण बदले", "हैरान करने वाला")
-    - **If Value:** Use benefit-driven words. (e.g., "बड़ी राहत", "खुशखबरी", "बदल जाएगी दुनिया", "कमाई का मौका")
-    - **Constraint:** < 15 words. Dramatic but 100% factual.
+1. **HEADLINE (Hindi):**
+    - MUST include the location or benefit. (e.g., "नागौर मंडी भाव: आज मूंग के दामों में भारी तेजी", "REET भर्ती परीक्षा को लेकर बड़ी खबर", "नागौर जिले के लिए नई योजना")
+    - < 15 words.
 
 2. **ARTICLE BODY (Hindi):**
-    - **Length:** 350-400 words.
-    - **MANDATORY FORMATTING:** 
-        - NEVER use Markdown (###, **, etc.).
-        - USE HTML ONLY: <p>, <h3>, <strong>, <ul>, <li>.
-        - Wrap EVERY paragraph in <p></p> tags.
-    - **Structure:**
-        1. **The Hook (Para 1):** Wrap in <p> tags. Start with the most impactful detail. 
-        2. **The Deep Dive (<h3> Subheading):** Use <h3> tags. Detailed explanation.
-        3. **Why It Matters (<h3> Subheading):** Use <h3> tags. If Masala: The drama/consequence. If Value: The benefit/impact.
-        4. **Key Takeaways (<ul><li>):** Summarize in a bulleted list.
+    - **Length:** 350-450 words.
+    - **MANDATORY FORMATTING:** USE HTML ONLY: <p>, <h3>, <strong>, <ul>, <li>.
+    
+    **FOR MANDI RATES:**
+    - Use <h3>आज के प्रमुख भाव</h3>
+    - Use a bulleted list <ul><li> for different crops and their rates.
+
+    **FOR SCHEMES/JOBS:**
+    - Use <h3>पात्रता (Eligibility)</h3>, <h3>आवेदन प्रक्रिया (Process)</h3>, <h3>जरूरी दस्तावेज (Documents)</h3>.
 
 3. **IMAGE PROMPT (English):**
-    - **Instruction:** Match the mood. If Masala: High contrast, dramatic lighting, intense expressions. If Value: Clean, modern, vibrant, tech-focused.
+    - **Goal:** Supreme quality, Photorealistic, Cinematic.
+    - **Structure:** Start with the Subject, then Lighting/Mood, then Technical specs.
+    - **Keywords to Include:** "highly detailed face, symmetrical features, sharp focus, 8k resolution, cinematic lighting, golden hour, Rajasthan rural atmosphere".
+    - **Context:** If it's a person: "Professional portrait of [Subject], looking confident, perfect eyes, natural skin texture". If it's a place: "Wide angle shot of [Place], dramatic sky".
+    - **Constraint:** No text in image. No distorted faces.
 
-4. **TAGS:** 5 relevant tags.
-5. **CATEGORY:** One of (राजनीति, मनोरंजन, तकनीक, स्टार्टअप, शिक्षा, विज्ञान, व्यापार, अन्य).
+4. **TAGS:** Include tags like 'Rajasthan News', 'Mandi Bhav', 'Sarkari Yojana'.
+5. **CATEGORY:** One of (सरकारी योजना, नौकरियां, राजस्थान, मंडी भाव, शिक्षा, अन्य).
+   *   **NOTE:** Map 'Schemes' to **'सरकारी योजना'**, 'Jobs' to **'नौकरियां'**, and all Mandi rates/Business to **'मंडी भाव'**.
 
 ### JSON STRUCTURE:
 {
@@ -285,6 +289,16 @@ async function generateContent(headline) {
 async function processArticle(item, status = 'published', imageGenEnabled = true) {
   const headline = item.title;
   const sourceUrl = item.link;
+  const pubDate = new Date(item.pubDate);
+  const now = new Date();
+  const timeDiffHours = (now - pubDate) / (1000 * 60 * 60);
+
+  // --- STRICT 24-HOUR FILTER 🛡️ ---
+  if (timeDiffHours > 24) {
+      console.log(`  ⏳ Skipped: Old news (${Math.floor(timeDiffHours)} hours ago). Strict 24h limit.`);
+      return;
+  }
+
   const preview = headline.length > 60 ? `${headline.substring(0, 60)}...` : headline;
   console.log(`
 📰 Processing: "${preview}"`);
@@ -328,8 +342,8 @@ async function processArticle(item, status = 'published', imageGenEnabled = true
 
     if (!finalImageUrl) {
       console.log('  🔄 Using Fallback Image (Scenario: AI Failed OR Disabled)...');
-      // Pick a random fallback image
-      finalImageUrl = FALLBACK_IMAGES[Math.floor(Math.random() * FALLBACK_IMAGES.length)];
+      // Use smart fallback based on category
+      finalImageUrl = getCategoryFallback(aiData.category);
     }
 
     const dataToSave = {
@@ -342,7 +356,7 @@ async function processArticle(item, status = 'published', imageGenEnabled = true
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       views: 0,
       status: status, // 'published' or 'draft'
-      author: 'Daily Dhandora Desk' // Added for AdSense Trust
+      author: 'Abhishek' // Added for AdSense Trust
     };
 
     const docRef = await db.collection('articles').add(dataToSave);
@@ -421,6 +435,23 @@ async function runBot() {
   }
 
   for (const feedUrl of RSS_FEEDS) {
+    // RE-CHECK SETTINGS INSIDE THE LOOP FOR REAL-TIME CONTROL
+    try {
+      const settingsDoc = await db.collection('settings').doc('global').get();
+      if (settingsDoc.exists) {
+          const data = settingsDoc.data();
+          botMode = data.botMode || 'auto';
+          imageGenEnabled = data.imageGenEnabled !== false;
+      }
+    } catch (err) {
+        console.error("  ⚠️  Settings re-check failed, continuing with last known state.");
+    }
+
+    if (botMode === 'off') {
+        console.log("  🔴 Kill Switch detected (OFF). Stopping bot immediately.");
+        break; 
+    }
+
     console.log(`
 📡 Fetching RSS feed: ${feedUrl}`);
     try {

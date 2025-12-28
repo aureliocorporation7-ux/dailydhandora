@@ -7,15 +7,11 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const categoryMapping = {
-  'politics': 'राजनीति',
-  'entertainment': 'मनोरंजन',
-  'technology': 'तकनीक',
-  'business': 'व्यापार',
-  'sports': 'खेल',
-  'education': 'शिक्षा',
-  'science': 'विज्ञान',
-  'startups': 'स्टार्टअप',
-  'health': 'स्वास्थ्य'
+  'schemes': 'सरकारी योजना',
+  'jobs': 'नौकरियां',
+  'politics': 'राजस्थान',
+  'business': 'मंडी भाव',
+  'education': 'शिक्षा'
 };
 
 async function getCategoryArticles(slug) {
@@ -38,6 +34,7 @@ async function getCategoryArticles(slug) {
         ...data,
         createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString()) : null,
         publishedAt: data.publishedAt ? (data.publishedAt.toDate ? data.publishedAt.toDate().toISOString() : new Date(data.publishedAt).toISOString()) : null,
+        updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString()) : null,
       };
     });
   } catch (error) {

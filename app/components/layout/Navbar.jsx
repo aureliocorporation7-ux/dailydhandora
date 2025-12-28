@@ -14,29 +14,58 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3 group">
-            <div className="relative">
-              <div className="absolute inset-0 bg-primary/20 rounded-full blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <span className="text-2xl transform group-hover:scale-110 transition-transform duration-300">📰</span>
+            <div className="relative h-12 w-12 sm:h-14 sm:w-14">
+                {/* Ensure logo.png is in public folder */}
+                <img 
+                    src="/logo.png" 
+                    alt="DailyDhandora Logo" 
+                    className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-lg"
+                />
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent group-hover:from-primary group-hover:to-orange-400 transition-all duration-300">
-              DailyDhandora
-            </span>
+            <div className="flex flex-col">
+              <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent group-hover:from-primary group-hover:to-orange-400 transition-all duration-300 leading-none">
+                DailyDhandora
+              </span>
+              <span className="text-[10px] text-primary font-bold tracking-widest mt-0.5 uppercase block">
+                नागौर का अपना डिजिटल पोर्टल
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            {['होम', 'श्रेणियां', 'हमारे बारे में', 'संपर्क'].map((item, idx) => {
-                const paths = ['/', '/categories', '/about', '/contact'];
-                return (
-                    <Link 
-                        key={idx} 
-                        href={paths[idx]} 
-                        className="text-white/70 hover:text-primary font-medium transition-colors duration-200 text-sm tracking-wide hover:bg-white/5 px-3 py-2 rounded-lg"
-                    >
-                        {item}
-                    </Link>
-                )
-            })}
+            {[{
+              name: 'होम',
+              path: '/'
+            },
+            {
+              name: 'सरकारी योजना',
+              path: '/category/schemes'
+            },
+            {
+              name: 'नौकरियां',
+              path: '/category/jobs'
+            },
+            {
+              name: 'मंडी भाव',
+              path: '/category/business'
+            },
+            {
+              name: 'शिक्षा',
+              path: '/category/education'
+            },
+            {
+              name: 'राजस्थान',
+              path: '/category/politics'
+            }].map((item, idx) => (
+              <Link 
+                key={idx} 
+                href={item.path} 
+                className="text-white/70 hover:text-primary font-medium transition-colors duration-200 text-sm tracking-wide hover:bg-white/5 px-3 py-2 rounded-lg"
+              >
+                {item.name}
+              </Link>
+            ))}
             
             {/* Notification Bell */}
             <div className="border-l border-white/10 pl-6">
@@ -62,12 +91,39 @@ export default function Navbar() {
       {isOpen && (
         <div className="md:hidden bg-neutral-900 border-t border-neutral-800 shadow-2xl absolute w-full left-0">
           <div className="px-4 pt-4 pb-6 space-y-3">
-            <Link href="/" onClick={() => setIsOpen(false)} className="block px-4 py-3 text-white hover:bg-neutral-800 rounded-lg">
-              🏠 होम
-            </Link>
-            <Link href="/categories" onClick={() => setIsOpen(false)} className="block px-4 py-3 text-white hover:bg-neutral-800 rounded-lg">
-              📑 श्रेणियां
-            </Link>
+            {[{
+              name: '🏠 होम',
+              path: '/'
+            },
+            {
+              name: '🏛️ सरकारी योजना',
+              path: '/category/schemes'
+            },
+            {
+              name: '🎓 नौकरियां',
+              path: '/category/jobs'
+            },
+            {
+              name: '🌾 मंडी भाव',
+              path: '/category/business'
+            },
+            {
+              name: '📚 शिक्षा',
+              path: '/category/education'
+            },
+            {
+              name: '🚩 राजस्थान',
+              path: '/category/politics'
+            }].map((item, idx) => (
+              <Link 
+                key={idx} 
+                href={item.path} 
+                onClick={() => setIsOpen(false)} 
+                className="block px-4 py-3 text-white hover:bg-neutral-800 rounded-lg"
+              >
+                {item.name}
+              </Link>
+            ))}
             <Link href="/about" onClick={() => setIsOpen(false)} className="block px-4 py-3 text-white hover:bg-neutral-800 rounded-lg">
               ℹ️ हमारे बारे में
             </Link>
