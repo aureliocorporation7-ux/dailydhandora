@@ -6,19 +6,17 @@ export const revalidate = 0;
 
 export default function CategoriesPage() {
   const categories = [
-    { name: 'राजनीति', icon: '🏛️', slug: 'politics' },
-    { name: 'खेल', icon: '⚽', slug: 'sports' },
-    { name: 'मनोरंजन', icon: '🎬', slug: 'entertainment' },
-    { name: 'तकनीक', icon: '💻', slug: 'technology' },
-    { name: 'व्यापार', icon: '💼', slug: 'business' },
-    { name: 'स्वास्थ्य', icon: '🏥', slug: 'health' },
+    { name: 'मंडी भाव', icon: '🌾', slug: 'mandi-bhav' },
+    { name: 'नागौर न्यूज़', icon: '📰', slug: 'nagaur-news' },
+    { name: 'सरकारी योजना', icon: '🏛️', slug: 'schemes' },
+    { name: 'भर्ती व रिजल्ट', icon: '🎓', slug: 'bharti-result' },
   ];
 
   return (
     <div className="min-h-screen bg-neutral-950">
       <header className="sticky top-0 z-10 flex items-center bg-neutral-950/80 backdrop-blur-sm p-4 border-b border-neutral-800">
         <Link href="/" className="text-neutral-200 p-2 -ml-2">
-          <span className="material-symbols-outlined text-2xl">arrow_back_ios_new</span>
+            <span className="text-2xl">←</span>
         </Link>
         <h1 className="text-white text-xl font-headings font-bold flex-1 text-center">
           श्रेणियां

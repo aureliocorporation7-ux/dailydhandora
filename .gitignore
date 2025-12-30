@@ -41,3 +41,6 @@ problem.txt
 scripts/*.bak*
 scripts/*.backup
 history.txt
+
+# Backup
+_backup/

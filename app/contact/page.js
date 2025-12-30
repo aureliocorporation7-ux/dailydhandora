@@ -22,7 +22,7 @@ export default function Contact() {
               <div>
                 <h3 className="font-bold text-lg">Email Us</h3>
                 <p className="text-gray-400">For general inquiries and press:</p>
-                <a href="mailto:aureliocorporation7@gmail.com" className="text-blue-500 hover:underline">aureliocorporation7@gmail.com</a>
+                <a href="mailto:aureliocorporation7@gmail.com" className="text-blue-500 hover:underline break-all text-xs sm:text-base">aureliocorporation7@gmail.com</a>
               </div>
             </div>
 
@@ -47,7 +47,8 @@ export default function Contact() {
               <div>
                 <h3 className="font-bold text-lg">Work With Us</h3>
                 <p className="text-gray-400">
-                  Are you a freelance journalist? Send your portfolio to <span className="text-blue-500">aureliocorporation7@gmail.com</span>
+                  Are you a freelance journalist? Send your portfolio to:<br/>
+                  <a href="mailto:aureliocorporation7@gmail.com" className="text-blue-500 break-all text-sm sm:text-base font-medium">aureliocorporation7@gmail.com</a>
                 </p>
               </div>
             </div>

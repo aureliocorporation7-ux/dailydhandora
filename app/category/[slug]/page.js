@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import ArticleCard from '@/app/components/ArticleCard';
+import ArticleGrid from '@/app/components/ArticleGrid';
 import Link from 'next/link';
 
 // Force dynamic rendering
@@ -8,10 +8,9 @@ export const revalidate = 0;
 
 const categoryMapping = {
   'schemes': 'सरकारी योजना',
-  'jobs': 'नौकरियां',
-  'politics': 'राजस्थान',
-  'business': 'मंडी भाव',
-  'education': 'शिक्षा'
+  'mandi-bhav': 'मंडी भाव',
+  'nagaur-news': 'नागौर न्यूज़',
+  'bharti-result': 'भर्ती व रिजल्ट'
 };
 
 async function getCategoryArticles(slug) {
@@ -47,12 +46,13 @@ export default async function CategoryPage({ params }) {
   const { slug } = await params;
   const articles = await getCategoryArticles(slug);
   const hindiName = categoryMapping[slug] || slug;
+  const hindiCategory = categoryMapping[slug];
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       <header className="sticky top-0 z-10 bg-[#0a0a0a]/80 backdrop-blur-sm border-b border-neutral-800 p-4">
         <div className="max-w-7xl mx-auto flex items-center">
-            <Link href="/categories" className="text-neutral-400 hover:text-white mr-4">
+            <Link href="/" className="text-neutral-400 hover:text-white mr-4">
                 ← Back
             </Link>
             <h1 className="text-2xl font-bold capitalize text-primary">{hindiName} News</h1>
@@ -66,15 +66,7 @@ export default async function CategoryPage({ params }) {
             <p className="text-sm text-gray-600 mt-2">जल्द ही अपडेट होगा!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {articles.map((article, index) => (
-              <ArticleCard 
-                key={article.id} 
-                article={article} 
-                index={index} 
-              />
-            ))}
-          </div>
+          <ArticleGrid initialArticles={articles} hindiCategory={hindiCategory} />
         )}
       </main>
     </div>

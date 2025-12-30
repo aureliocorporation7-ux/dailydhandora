@@ -8,6 +8,14 @@ import NotificationBell from '../NotificationBell';
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
 
+  const menuItems = [
+    { name: 'होम', path: '/' },
+    { name: 'मंडी भाव', path: '/category/mandi-bhav' },
+    { name: 'नागौर न्यूज़', path: '/category/nagaur-news' },
+    { name: 'सरकारी योजना', path: '/category/schemes' },
+    { name: 'भर्ती व रिजल्ट', path: '/category/bharti-result' },
+  ];
+
   return (
     <nav className="sticky top-0 z-50 bg-neutral-950/80 backdrop-blur-md border-b border-white/10 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -15,7 +23,6 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3 group">
             <div className="relative h-12 w-12 sm:h-14 sm:w-14">
-                {/* Ensure logo.png is in public folder */}
                 <img 
                     src="/logo.png" 
                     alt="DailyDhandora Logo" 
@@ -34,30 +41,7 @@ export default function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            {[{
-              name: 'होम',
-              path: '/'
-            },
-            {
-              name: 'सरकारी योजना',
-              path: '/category/schemes'
-            },
-            {
-              name: 'नौकरियां',
-              path: '/category/jobs'
-            },
-            {
-              name: 'मंडी भाव',
-              path: '/category/business'
-            },
-            {
-              name: 'शिक्षा',
-              path: '/category/education'
-            },
-            {
-              name: 'राजस्थान',
-              path: '/category/politics'
-            }].map((item, idx) => (
+            {menuItems.map((item, idx) => (
               <Link 
                 key={idx} 
                 href={item.path} 
@@ -91,30 +75,7 @@ export default function Navbar() {
       {isOpen && (
         <div className="md:hidden bg-neutral-900 border-t border-neutral-800 shadow-2xl absolute w-full left-0">
           <div className="px-4 pt-4 pb-6 space-y-3">
-            {[{
-              name: '🏠 होम',
-              path: '/'
-            },
-            {
-              name: '🏛️ सरकारी योजना',
-              path: '/category/schemes'
-            },
-            {
-              name: '🎓 नौकरियां',
-              path: '/category/jobs'
-            },
-            {
-              name: '🌾 मंडी भाव',
-              path: '/category/business'
-            },
-            {
-              name: '📚 शिक्षा',
-              path: '/category/education'
-            },
-            {
-              name: '🚩 राजस्थान',
-              path: '/category/politics'
-            }].map((item, idx) => (
+            {menuItems.map((item, idx) => (
               <Link 
                 key={idx} 
                 href={item.path} 

@@ -6,13 +6,14 @@
     "build": "next build",
     "start": "node index.js",
     "lint": "next lint",
-    "bot": "node scripts/run-bot.js",
+    "bot": "node bot.js",
     "cleanup-images": "node scripts/cleanup-images.js"
   },
   "dependencies": {
     "@google/generative-ai": "latest",
     "@huggingface/inference": "latest",
     "axios": "latest",
+    "cheerio": "^1.1.2",
     "dotenv": "latest",
     "express": "^5.2.1",
     "firebase": "latest",
