@@ -121,6 +121,18 @@ async function generateNewsCard(imageUrl, headline) {
             compositeOps.push({ input: logoBuffer, top: 20, left: width - 170 });
         }
 
+        return await sharp(inputImageBuffer)
+            .resize(width, height)
+            .composite(compositeOps)
+            .png()
+            .toBuffer();
+
+    } catch (e) {
+        console.error("❌ [Card Gen] Error:", e);
+        return null;
+    }
+}
+
 /**
  * 🌾 Generates a "Mandi Bhav" card with a rate table.
  * @param {Array<{crop: string, min: string, max: string}>} rates - List of top crops.
