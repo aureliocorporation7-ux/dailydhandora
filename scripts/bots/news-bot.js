@@ -63,22 +63,31 @@ function sanitizeContent(text) {
 // ========================================== 
 // 1. DAINIK BHASKAR SCRAPER (PRIMARY)
 // ========================================== 
+const BHASKAR_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+    'Referer': 'https://www.google.com/'
+};
+
 async function scrapeBhaskarArticle(url) {
     console.log(`     🕸️ [Bhaskar] Scraping Content: ${url}`);
     try {
         const { data } = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
+            headers: BHASKAR_HEADERS,
             timeout: 15000
         });
         const $ = cheerio.load(data);
 
+        // REMOVED STRICT DATE CHECK: Relying on DB duplicate check instead.
+        // This ensures we don't miss late-night news fetched the next morning.
+        /*
         let pubDate = $('meta[property="article:published_time"]').attr('content');
         if (pubDate && !isToday(pubDate)) {
             console.log(`     📅 [Bhaskar] Skipping: Old news from ${pubDate}`);
             return null;
         }
+        */
 
         const headline = $('h1').first().text().trim();
         let bodyText = '';
@@ -123,9 +132,7 @@ async function fetchBhaskarNews(settings) {
     let articles = [];
     try {
         const { data } = await axios.get(listUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
+            headers: BHASKAR_HEADERS
         });
         const $ = cheerio.load(data);
 
