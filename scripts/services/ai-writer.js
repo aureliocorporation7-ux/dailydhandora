@@ -12,54 +12,31 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const groq = new Groq({ apiKey: process.env.GOD_API_KEY });
 
 const SYSTEM_PROMPT = `
-You are the "Master Editor" for DailyDhandora, specializing in **Nagaur & Rajasthan Rural Utility & News**. Your goal is to be the #1 trusted source for Nagaur's farmers, students, and villagers.
+You are the "Senior Editor-in-Chief" for DailyDhandora, Nagaur's most trusted digital news portal.
+
+**CRITICAL MANDATE: ZERO SOURCE MENTION**
+1. **NEVER** use the words "Dainik Bhaskar", "Bhaskar", "Patrika", "Rajasthan Patrika", "Source", "Credits", or "Agency".
+2. **NEVER** include phrases like "As reported by", "According to", or "Read more at".
+3. **DO NOT** mention any reporter names found in the source text.
+4. **STRICT RULE:** You are the ORIGINAL reporter. Use "DailyDhandora Team", "हमारे नागौर संवाददाता", or "एक्सक्लूसिव रिपोर्ट".
 
 **CRITICAL INSTRUCTION: You MUST provide the output strictly in JSON format.**
 
 ### YOUR LOCAL PERSONA:
+- You represent the voice of Nagaur district. Your tone is authoritative, grounded, and professional.
+- You use "हम" (We) or "हमारी टीम" (Our team).
 
-1.  **THE NAGAUR & RAJASTHAN EXPERT:** 🌾
-    *   **Goal:** Provide accurate crop rates (especially for Nagaur Mandi - Moong, Jeera, Mustard) and local news.
-    *   **Tone:** Helpful, local, and grounded. Use terms like "नागौर के किसान भाई", "मंडी आवक", "तेजी-मंदी".
-    *   **Style:** Clear tables or lists for rates. Mention Nagaur specifically whenever relevant.
-
-2.  **THE RAJASTHAN CAREER GUIDE:** 🎓
-    *   **Goal:** Update on REET, Rajasthan Police, CET, and other state exams.
-    *   **Tone:** Encouraging and informative.
-
-3.  **THE SCHEME HELPER:** 🏛️
-    *   **Goal:** Explain Rajasthan State Govt schemes (e.g., Chiranjeevi, Annapurna, Free Mobile).
-
-### OUTPUT FORMAT:
-**Strictly JSON only.** Do not output any markdown code blocks like '''json. Just the raw JSON object.
+### CATEGORY DEFINITIONS (CHOOSE STRICTLY FROM THIS LIST):
+- **मंडी भाव**: For all crop rates, market arrivals (आवक), and business news.
+- **नागौर न्यूज़**: For local events, accidents, crime, and general news within Nagaur district.
+- **सरकारी योजना**: For state and central government schemes, benefits, and applications.
+- **भर्ती व रिजल्ट**: For all job notifications, exams, and results.
 
 ### TASKS:
-
-1. **HEADLINE (Hindi):**
-    - MUST include the location or benefit. (e.g., "नागौर मंडी भाव: आज मूंग के दामों में भारी तेजी", "REET भर्ती परीक्षा को लेकर बड़ी खबर", "नागौर जिले के लिए नई योजना")
-    - < 15 words.
-
-2. **ARTICLE BODY (Hindi):**
-    - **Length:** 350-450 words.
-    - **MANDATORY FORMATTING:** USE HTML ONLY: <p>, <h3>, <strong>, <ul>, <li>.
-    
-    **FOR MANDI RATES:**
-    - Use <h3>आज के प्रमुख भाव</h3>
-    - Use a bulleted list <ul><li> for different crops and their rates.
-
-    **FOR SCHEMES/JOBS:**
-    - Use <h3>पात्रता (Eligibility)</h3>, <h3>आवेदन प्रक्रिया (Process)</h3>, <h3>जरूरी दस्तावेज (Documents)</h3>.
-
-3. **IMAGE PROMPT (English):**
-    - **Goal:** Supreme quality, Photorealistic, Cinematic.
-    - **Structure:** Start with the Subject, then Lighting/Mood, then Technical specs.
-    - **Keywords to Include:** "highly detailed face, symmetrical features, sharp focus, 8k resolution, cinematic lighting, golden hour, Rajasthan rural atmosphere".
-    - **Context:** If it's a person: "Professional portrait of [Subject], looking confident, perfect eyes, natural skin texture". If it's a place: "Wide angle shot of [Place], dramatic sky".
-    - **Constraint:** No text in image. No distorted faces.
-
-4. **TAGS:** Include tags like 'Rajasthan News', 'Mandi Bhav', 'Sarkari Yojana'.
-5. **CATEGORY:** One of (सरकारी योजना, नौकरियां, राजस्थान, मंडी भाव, शिक्षा, अन्य).
-   *   **NOTE:** Map 'Schemes' to **'सरकारी योजना'**, 'Jobs' to **'नौकरियां'**, and all Mandi rates/Business to **'मंडी भाव'**.
+1. **HEADLINE (Hindi):** Click-worthy, includes location, < 15 words.
+2. **ARTICLE BODY (Hindi):** 450-500 words. Use HTML: <p>, <h3>, <strong>, <ul>, <li>. Use <h3> for subheadings.
+3. **IMAGE PROMPT (English):** High-quality news photography style prompt.
+4. **TAGS:** Local tehsil names and relevant keywords.
 
 ### JSON STRUCTURE:
 {
@@ -80,40 +57,34 @@ function cleanJSON(text) {
 
 /**
  * ✍️ Generates an article using Gemini or Groq based on the input prompt.
- * @param {string} userPrompt - The context/content to base the article on.
- * @returns {Promise<Object|null>} - The parsed JSON article data or null on failure.
  */
 async function writeArticle(userPrompt) {
     console.log(`\n  🧠 [AI Writer] Received Prompt. Length: ${userPrompt.length} chars.`);
 
     async function tryGemini(modelName, label) {
         try {
-            console.log(`     🤖 [AI Writer] Attempting with ${label} (${modelName})...
-`);
+            console.log(`     🤖 [AI Writer] Attempting with ${label} (${modelName})...`);
             const model = genAI.getGenerativeModel({ model: modelName, systemInstruction: SYSTEM_PROMPT });
             const result = await model.generateContent(userPrompt);
             const text = result.response.text();
-            console.log(`     ✅ [AI Writer] ${label} Success. Parsing JSON...
-`);
+            console.log(`     ✅ [AI Writer] ${label} Success. Parsing JSON...`);
             return JSON.parse(cleanJSON(text));
-                } catch (e) { 
-                    let msg = e.message || 'Unknown Error';
-                    if (msg.includes('429') || msg.includes('Quota exceeded')) {
-                        msg = 'Rate Limit / Quota Exceeded (429)';
-                    } else if (msg.length > 100) {
-                        // Truncate long error messages
-                        msg = msg.substring(0, 100) + '...';
-                    }
-                    console.log(`     ⚠️ [AI Writer] ${label} Failed: ${msg}`);
-                    return null; 
-                } 
-    }
+        } catch (e) { 
+            let msg = e.message || 'Unknown Error';
+            if (msg.includes('429') || msg.includes('Quota exceeded')) {
+                msg = 'Rate Limit / Quota Exceeded (429)';
+            } else if (msg.length > 100) {
+                msg = msg.substring(0, 100) + '...';
+            }
+            console.log(`     ⚠️ [AI Writer] ${label} Failed: ${msg}`);
+            return null; 
+        } 
+    } 
 
     let data = await tryGemini('gemini-2.5-flash', 'Gemini Primary');
     
     if (!data) {
-        console.log(`     🔄 [AI Writer] Switching to Lite model...
-`);
+        console.log(`     🔄 [AI Writer] Switching to Lite model...`);
         data = await tryGemini('gemini-2.5-flash-lite', 'Gemini Lite');
     }
     
@@ -126,8 +97,7 @@ async function writeArticle(userPrompt) {
                 response_format: { type: "json_object" }
             });
             const content = completion.choices[0].message.content;
-            console.log(`     ✅ [AI Writer] Groq Success. Parsing JSON...
-`);
+            console.log(`     ✅ [AI Writer] Groq Success. Parsing JSON...`);
             return JSON.parse(cleanJSON(content));
         } catch (e) { 
             const msg = e.message.length > 100 ? e.message.substring(0, 100) + '...' : e.message;

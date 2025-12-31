@@ -1,10 +1,18 @@
+import SkeletonCard from '@/app/components/SkeletonCard';
+
 export default function Loading() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-orange-500 border-r-transparent"></div>
-        <p className="mt-4 text-gray-400">[translate:लोड हो रहा है...]</p>
-      </div>
+    <div className="bg-[#0a0a0a] min-h-screen">
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        <div className="h-8 bg-neutral-900 rounded w-48 mb-6 animate-pulse"></div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Show 6 skeleton cards while loading */}
+          {[...Array(6)].map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      </main>
     </div>
   );
 }

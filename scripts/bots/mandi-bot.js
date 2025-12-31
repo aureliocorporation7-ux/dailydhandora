@@ -1,6 +1,7 @@
 const axios = require('axios');
 const aiWriter = require('../services/ai-writer');
 const imageGen = require('../services/image-gen');
+const newsCardGen = require('../services/news-card-gen');
 const dbService = require('../services/db-service');
 const { getCategoryFallback } = require('../../lib/stockImages');
 
@@ -22,6 +23,8 @@ async function run() {
     let combinedText = "";
     let apiDate = null;
     let hasData = false;
+
+    const ratesForCard = [];
 
     // 2. FETCH DATA FIRST
     for (const apmc of apmcs) {
@@ -51,6 +54,12 @@ async function run() {
                     const max = item.maxPrice || "0";
                     const avg = item.modalPrice || "0";
                     combinedText += `- ${fasal}: ₹${min} - ₹${max} (Avg: ₹${avg})\n`;
+
+                    // Collect for Card (Prioritize Jeera, Guar, Moong if possible, or just push top ones)
+                    // Simple logic: Push all unique crops, we slice in the generator
+                    if (!ratesForCard.find(r => r.crop === fasal)) {
+                         ratesForCard.push({ crop: fasal, min: min, max: max });
+                    }
                 }
             });
             combinedText += "\n";
@@ -114,6 +123,21 @@ async function run() {
         imageUrl = getCategoryFallback('Mandi Bhav');
     }
 
+    // 🎴 GENERATE MANDI CARD
+    let shareCardUrl = null;
+    try {
+        if (ratesForCard.length > 0) {
+            console.log("     🎨 [Mandi Bot] Generating Rate Card...");
+            const cardBuffer = await newsCardGen.generateMandiCard(ratesForCard, apiDate);
+            if (cardBuffer) {
+                shareCardUrl = await imageGen.uploadToImgBB(cardBuffer);
+                if (shareCardUrl) console.log("     ✅ [Mandi Bot] Rate Card Created & Uploaded!");
+            }
+        }
+    } catch (e) {
+        console.error(`     ⚠️ [Mandi Bot] Card Gen Failed: ${e.message}`);
+    }
+
     // 6. SAVE
     const articleData = {
         headline: aiData.headline,
@@ -125,6 +149,7 @@ async function run() {
         category: 'मंडी भाव',
         sourceUrl: uniqueUrl,
         imageUrl: imageUrl,
+        shareCardUrl: shareCardUrl || imageUrl, // Fallback
         status: settings.articleStatus,
         author: 'MandiBot'
     };

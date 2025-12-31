@@ -94,8 +94,31 @@ export default async function BlogPost({ params }) {
   const shareUrl = encodeURIComponent(`https://dailydhandora.vercel.app/blog/${article.slug}`);
   const shareText = encodeURIComponent(article.title);
   const whatsappUrl = `https://wa.me/?text=${shareText}%20${shareUrl}`;
+
+  // SEO: NewsArticle Schema
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: article.title,
+    // Use article.image or default to logo if not present
+    image: article.image ? [article.image] : ['https://dailydhandora.vercel.app/logo.png'],
+    datePublished: article.createdAt,
+    dateModified: article.createdAt, // Or updatedAt if available
+    author: [{
+        '@type': 'Organization',
+        name: 'DailyDhandora Team',
+        url: 'https://dailydhandora.vercel.app'
+    }]
+  };
+
   return (
     <>
+      {/* Inject Schema for Google */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       {/* Header */}
       <header className="sticky top-0 z-10 flex items-center bg-bg-primary/80 px-4 py-3 backdrop-blur-sm border-b border-bg-tertiary">
         <Link href="/" className="text-text-primary p-2 -ml-2 hover:bg-bg-secondary rounded-lg">

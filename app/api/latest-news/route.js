@@ -43,6 +43,7 @@ export async function GET(request) {
         summary: summary,
         link: `${baseUrl}/article/${doc.id}`,
         imageUrl: data.imageUrl || '',
+        shareCardUrl: data.shareCardUrl || data.imageUrl || '', // New: Viral Card URL
         publishedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       };
     });

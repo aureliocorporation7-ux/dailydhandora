@@ -65,22 +65,31 @@ async function generateImage(prompt) {
         return null;
     }
 
+    return await uploadToImgBB(buffer);
+}
+
+/**
+ * 📤 Uploads an image buffer to ImgBB.
+ * @param {Buffer} buffer - The image buffer.
+ * @returns {Promise<string|null>} - The URL of the uploaded image.
+ */
+async function uploadToImgBB(buffer) {
     try {
-        console.log("     📤 [Image Gen] Uploading to ImgBB...");
+        console.log("     📤 [ImgBB] Uploading...");
         const form = new FormData();
         form.append('image', buffer.toString('base64'));
         const res = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, form, { headers: { ...form.getHeaders() } });
         
         if (res.data.success) {
-            console.log(`     ✅ [Image Gen] Upload Complete: ${res.data.data.url}`);
+            console.log(`     ✅ [ImgBB] Upload Complete: ${res.data.data.url}`);
             return res.data.data.url;
         } else {
-            console.error(`     ❌ [Image Gen] ImgBB reported failure.`);
+            console.error(`     ❌ [ImgBB] Upload Failed: ${JSON.stringify(res.data)}`);
         }
     } catch (e) { 
-        console.error(`     ❌ [Image Gen] ImgBB Upload Error: ${e.message}`); 
+        console.error(`     ❌ [ImgBB] Error: ${e.message}`); 
     }
     return null;
 }
 
-module.exports = { generateImage };
+module.exports = { generateImage, uploadToImgBB };

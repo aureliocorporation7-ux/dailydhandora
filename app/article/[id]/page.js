@@ -1,14 +1,34 @@
-import { db } from '@/lib/firebase';
+import { notFound } from 'next/navigation';
+import Link from 'next/link';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import Image from 'next/image';
 import ArticleMeta from '@/app/components/ArticleMeta';
 import AudioPlayer from '@/app/components/AudioPlayer';
 import ArticleActions from '@/app/components/ArticleActions';
-import Image from 'next/image';
-import Link from 'next/link';
 
 export const revalidate = 3600; // Revalidate every hour
 
+function getFirebaseAdmin() {
+  if (getApps().length === 0) {
+    let serviceAccount;
+    if (process.env.FIREBASE_SERVICE_KEY_BASE64) {
+      const decoded = Buffer.from(
+        process.env.FIREBASE_SERVICE_KEY_BASE64,
+        'base64'
+      ).toString('utf8');
+      serviceAccount = JSON.parse(decoded);
+    } else {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_KEY);
+    }
+    initializeApp({ credential: cert(serviceAccount) });
+  }
+  return getFirestore();
+}
+
 async function getArticle(id) {
   try {
+    const db = getFirebaseAdmin();
     const doc = await db.collection('articles').doc(id).get();
     
     if (!doc.exists) {
@@ -32,6 +52,7 @@ async function getArticle(id) {
 async function getRelatedArticles(category, currentId) {
     if (!category) return [];
     try {
+        const db = getFirebaseAdmin();
         const snapshot = await db.collection('articles')
             .where('category', '==', category)
             .where('status', '==', 'published')
@@ -73,42 +94,72 @@ export default async function ArticlePage({ params }) {
     );
   }
 
-  // Safe to call now because article exists
   const relatedArticles = await getRelatedArticles(article.category, article.id);
+
+  // SEO: NewsArticle Schema
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: article.headline,
+    image: [article.imageUrl],
+    datePublished: article.createdAt,
+    dateModified: article.updatedAt || article.createdAt,
+    author: [{
+        '@type': 'Organization',
+        name: 'DailyDhandora Team',
+        url: 'https://dailydhandora.vercel.app'
+    }]
+  };
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white" suppressHydrationWarning>
+      {/* Inject Schema for Google */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       <article className="max-w-4xl mx-auto px-4 py-12">
-        <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden">
+        <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden shadow-2xl border border-neutral-800">
           <Image
             src={article.imageUrl}
             alt={article.headline || 'Article image'}
             fill
             className="object-cover"
-            quality={75}
             priority
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+          <div className="absolute bottom-6 left-6 right-6">
+             <span className="bg-primary text-white text-xs font-bold px-3 py-1 rounded-full mb-3 inline-block shadow-md">
+                {article.category}
+             </span>
+             <h1 className="text-3xl md:text-4xl font-bold leading-tight drop-shadow-lg">{article.headline}</h1>
+          </div>
         </div>
 
-        <div className="flex justify-between items-start gap-4 mb-6">
-            <h1 className="text-4xl font-bold flex-1">{article.headline}</h1>
-            <div className="flex-shrink-0 pt-1">
-                <AudioPlayer text={article.content} />
-            </div>
+        <div className="flex justify-between items-center gap-4 mb-8 bg-neutral-900/50 p-4 rounded-xl border border-white/5">
+             <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 bg-neutral-800 rounded-full flex items-center justify-center border border-white/10">
+                     <span className="text-xl">🎙️</span>
+                 </div>
+                 <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-widest font-bold">Listen News</p>
+                    <p className="text-sm font-bold text-white">Audio Summary</p>
+                 </div>
+             </div>
+             <AudioPlayer text={article.content} />
         </div>
         
         <ArticleMeta category={article.category} createdAt={article.createdAt} />
 
-        <div className="prose prose-invert max-w-none">
+        <div className="prose prose-invert max-w-none prose-lg prose-headings:text-primary prose-a:text-blue-400 hover:prose-a:text-blue-300">
           <div dangerouslySetInnerHTML={{ __html: article.content }} />
         </div>
 
-        {/* Action Buttons (Comments) after content */}
-        <div className="flex justify-end mt-6">
+        <div className="flex justify-end mt-8 pt-6 border-t border-neutral-800">
             <ArticleActions articleId={article.id} />
         </div>
 
-        {/* Author Box */}
         <div className="mt-12 p-6 bg-neutral-900/50 border border-neutral-800 rounded-xl flex items-start gap-4 shadow-lg">
             <div className="w-14 h-14 bg-neutral-800 rounded-full flex items-center justify-center flex-shrink-0 border border-white/10 overflow-hidden shadow-inner">
                 <img 
@@ -132,17 +183,6 @@ export default async function ArticlePage({ params }) {
             </div>
         </div>
 
-        {article.source && (
-          <div className="mt-8 pt-8 border-t border-gray-800">
-            <p className="text-sm text-gray-500">
-              स्रोत: <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                {article.source}
-              </a>
-            </p>
-          </div>
-        )}
-
-        {/* Related Articles Section */}
         {relatedArticles.length > 0 && (
             <div className="mt-16 pt-10 border-t border-neutral-800">
                 <h3 className="text-2xl font-bold text-white mb-6 border-l-4 border-primary pl-3">
