@@ -126,13 +126,19 @@ async function scrapeBhaskarArticle(url) {
 }
 
 async function fetchBhaskarNews(settings) {
-    const listUrl = 'https://www.bhaskar.com/local/rajasthan/nagaur';
-    console.log(`  ⏳ [News Bot] 1. Checking PRIMARY: Dainik Bhaskar (${listUrl})`);
+    // Anti-Caching: Add timestamp to force fresh fetch
+    const listUrl = `https://www.bhaskar.com/local/rajasthan/nagaur?t=${Date.now()}`;
+    console.log(`  ⏳ [News Bot] 1. Checking PRIMARY: Dainik Bhaskar (Fresh Fetch)`);
 
     let articles = [];
     try {
         const { data } = await axios.get(listUrl, {
-            headers: BHASKAR_HEADERS
+            headers: {
+                ...BHASKAR_HEADERS,
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
         });
         const $ = cheerio.load(data);
 

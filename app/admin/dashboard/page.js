@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { signOut } from 'firebase/auth'; // Import signOut
+import { auth } from '@/lib/firebase-client'; // Assuming firebase-client for client-side auth
 
 export default function Dashboard() {
   const router = useRouter();
@@ -11,8 +13,14 @@ export default function Dashboard() {
   const [imageGen, setImageGen] = useState(true);
   const [articles, setArticles] = useState([]);
   const [filter, setFilter] = useState('draft');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Loading for articles
   const [editingArticle, setEditingArticle] = useState(null);
+  
+  // New states for cleanup operations
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupMessage, setCleanupMessage] = useState('');
+  const [cleanupError, setCleanupError] = useState('');
+
 
   useEffect(() => {
     fetchSettings();
@@ -162,6 +170,64 @@ export default function Dashboard() {
     setEditingArticle(prev => ({ ...prev, [field]: value }));
   };
 
+  // New function for category cleanup
+  const handleCleanCategory = async (categoryName, displayCategory) => {
+    // 1. Initial Confirmation
+    if (!confirm(`⚠️ DANGER: Are you sure you want to delete ALL articles in the '${displayCategory}' category? This action cannot be undone.`)) {
+      return;
+    }
+
+    // 2. Master Password Prompt
+    const masterKey = prompt(`Enter MASTER PASSWORD to confirm deletion for ${displayCategory}:`);
+    
+    if (!masterKey) {
+      alert("Action cancelled. Master Password is required.");
+      return;
+    }
+
+    setCleanupLoading(true);
+    setCleanupMessage('');
+    setCleanupError('');
+
+    try {
+      const response = await fetch('/api/admin/cleanup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          category: categoryName,
+          masterKey: masterKey // Send the key to backend
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setCleanupMessage(data.message);
+        fetchArticles(); // Refresh articles after cleanup
+      } else {
+        setCleanupError(data.error || 'Authentication failed or unknown error.');
+      }
+    } catch (err) {
+      console.error('Cleanup API error:', err);
+      setCleanupError('Failed to connect to cleanup service.');
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push('/admin'); // Redirect to login page after logout
+    } catch (err) {
+      console.error('Logout error:', err);
+      // Removed local error state to avoid conflicts, rely on console for now.
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-red-500/30">
       <header className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-md border-b border-white/5">
@@ -197,15 +263,12 @@ export default function Dashboard() {
                     {!imageGen && (<p className="text-xs text-blue-300 mt-1 flex items-center gap-1"><span className="w-2 h-2 bg-blue-500 rounded-full"></span>Eco Mode: Image Gen Disabled</p>)}
                 </div>
             </div>
-        </div>
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-white/10 pb-4">
-            <div className="flex gap-6">
-                <button onClick={() => setFilter('draft')} className={`pb-1 text-sm font-bold uppercase tracking-wider transition-all relative ${filter === 'draft' ? 'text-white' : 'text-white/40 hover:text-white/70'}`}>Drafts</button>
-                <button onClick={() => setFilter('published')} className={`pb-1 text-sm font-bold uppercase tracking-wider transition-all relative ${filter === 'published' ? 'text-white' : 'text-white/40 hover:text-white/70'}`}>Published</button>
-            </div>
-            <button onClick={openCreateModal} className="bg-white text-black hover:bg-gray-200 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-white/10">
-                <span>✍️</span> Write New Article
+            <button
+                onClick={handleLogout}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:shadow-outline transition-colors duration-200"
+                disabled={cleanupLoading} // Use cleanupLoading to disable logout button during cleanup too
+            >
+                Logout
             </button>
         </div>
 
@@ -236,6 +299,54 @@ export default function Dashboard() {
                 ))}
             </div>
         )}
+
+        {/* Database Cleanup Section (Moved to Bottom) */}
+        <div className="mt-16 bg-red-900/10 border border-red-900/30 p-8 rounded-2xl">
+          <h2 className="text-xl font-bold mb-4 text-red-400 flex items-center gap-2">
+            <span>⚠️</span> Danger Zone
+          </h2>
+          <p className="text-white/40 mb-6 text-sm">
+            These actions are irreversible. Please ensure you have the Master Password before proceeding.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button
+              onClick={() => handleCleanCategory('नागौर न्यूज़', 'Nagaur News')}
+              className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 hover:text-red-300 font-bold py-4 px-6 rounded-xl transition-all duration-300 flex flex-col items-center gap-2 group"
+              disabled={cleanupLoading}
+            >
+              <span className="text-2xl group-hover:scale-110 transition-transform">🗑️</span>
+              <span className="text-xs uppercase tracking-widest">Delete Nagaur News</span>
+            </button>
+            <button
+              onClick={() => handleCleanCategory('मंडी भाव', 'Mandi Bhav')}
+              className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 hover:text-red-300 font-bold py-4 px-6 rounded-xl transition-all duration-300 flex flex-col items-center gap-2 group"
+              disabled={cleanupLoading}
+            >
+              <span className="text-2xl group-hover:scale-110 transition-transform">🌾</span>
+              <span className="text-xs uppercase tracking-widest">Delete Mandi Bhav</span>
+            </button>
+            <button
+              onClick={() => handleCleanCategory('सरकारी योजना', 'Sarkari Yojana')}
+              className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 hover:text-red-300 font-bold py-4 px-6 rounded-xl transition-all duration-300 flex flex-col items-center gap-2 group"
+              disabled={cleanupLoading}
+            >
+              <span className="text-2xl group-hover:scale-110 transition-transform">📜</span>
+              <span className="text-xs uppercase tracking-widest">Delete Schemes</span>
+            </button>
+            <button
+              onClick={() => handleCleanCategory('भर्ती व रिजल्ट', 'Bharti & Result')}
+              className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 hover:text-red-300 font-bold py-4 px-6 rounded-xl transition-all duration-300 flex flex-col items-center gap-2 group"
+              disabled={cleanupLoading}
+            >
+              <span className="text-2xl group-hover:scale-110 transition-transform">🎓</span>
+              <span className="text-xs uppercase tracking-widest">Delete Jobs/Results</span>
+            </button>
+          </div>
+          {cleanupLoading && <p className="mt-4 text-yellow-400 text-center animate-pulse">Processing cleanup request...</p>}
+          {cleanupMessage && <p className="mt-4 text-green-400 text-center font-bold bg-green-900/20 p-2 rounded-lg">{cleanupMessage}</p>}
+          {cleanupError && <p className="mt-4 text-red-400 text-center font-bold bg-red-900/20 p-2 rounded-lg">{cleanupError}</p>}
+        </div>
+        {/* End Database Cleanup Section */}
 
         {editingArticle && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">

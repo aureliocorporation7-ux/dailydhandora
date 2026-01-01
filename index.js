@@ -24,6 +24,13 @@ app.prepare().then(() => {
   server.listen(PORT, (err) => {
     if (err) throw err;
     console.log(`> 🚀 Server (Website) ready on port ${PORT}`);
-    console.log(`> 🤖 To run the bots, use: node bot.js`);
+    
+    // 🤖 AUTO-START BOTS
+    console.log(`> 🤖 Starting background bots...`);
+    try {
+      require('./bot.js');
+    } catch (botError) {
+      console.error('❌ Failed to start bots:', botError.message);
+    }
   });
 });
