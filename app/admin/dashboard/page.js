@@ -272,6 +272,21 @@ export default function Dashboard() {
             </button>
         </div>
 
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-white/10 pb-4">
+            <div className="flex gap-6">
+                <button onClick={() => setFilter('draft')} className={`pb-1 text-sm font-bold uppercase tracking-wider transition-all relative ${filter === 'draft' ? 'text-white' : 'text-white/40 hover:text-white/70'}`}>Drafts</button>
+                <button onClick={() => setFilter('published')} className={`pb-1 text-sm font-bold uppercase tracking-wider transition-all relative ${filter === 'published' ? 'text-white' : 'text-white/40 hover:text-white/70'}`}>Published</button>
+            </div>
+            <div className="flex gap-3">
+                <Link href="/admin/analytics" className="bg-neutral-800 text-gray-300 hover:bg-neutral-700 hover:text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all border border-white/5 shadow-lg shadow-black/20">
+                    <span>📊</span> Analytics
+                </Link>
+                <button onClick={openCreateModal} className="bg-white text-black hover:bg-gray-200 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all shadow-lg shadow-white/10">
+                    <span>✍️</span> Write New Article
+                </button>
+            </div>
+        </div>
+
         {/* Grid and Modal JSX below */}
         {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">{[1,2,3,4,5,6].map(i => (<div key={i} className="h-64 bg-white/5 rounded-xl"></div>))}</div>

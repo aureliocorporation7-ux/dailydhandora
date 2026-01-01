@@ -6,6 +6,7 @@ import Image from 'next/image';
 import ArticleMeta from '@/app/components/ArticleMeta';
 import AudioPlayer from '@/app/components/AudioPlayer';
 import ArticleActions from '@/app/components/ArticleActions';
+import ViewTracker from '@/app/components/ViewTracker';
 
 export const revalidate = 3600; // Revalidate every hour
 
@@ -120,6 +121,7 @@ export default async function ArticlePage({ params }) {
       />
 
       <article className="max-w-4xl mx-auto px-4 py-12">
+        <ViewTracker id={article.id} />
         <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden shadow-2xl border border-neutral-800">
           <Image
             src={article.imageUrl}
