@@ -16,39 +16,58 @@ export async function OPTIONS() {
 
 export async function GET(request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const categoryParam = searchParams.get('category');
+    const limitParam = parseInt(searchParams.get('limit') || '5');
+
+    // Category Mapping (English -> Hindi DB Fields)
+    const CATEGORY_MAP = {
+      'education': 'शिक्षा विभाग',
+      'mandi': 'मंडी भाव',
+      'news': 'नागौर न्यूज़',
+      'schemes': 'सरकारी योजना',
+      'jobs': 'भर्ती व रिजल्ट'
+    };
+
     // 1. Get Host and Protocol dynamically
     const host = request.headers.get('host');
     const protocol = request.headers.get('x-forwarded-proto') || 'https';
     const baseUrl = `${protocol}://${host}`;
 
-    // 2. Fetch top 5 published articles
-    const snapshot = await db.collection('articles')
-      .where('status', '==', 'published')
+    // 2. Build Query
+    let query = db.collection('articles').where('status', '==', 'published');
+
+    if (categoryParam && CATEGORY_MAP[categoryParam]) {
+        query = query.where('category', '==', CATEGORY_MAP[categoryParam]);
+    }
+
+    // 3. Execute Query
+    const snapshot = await query
       .orderBy('createdAt', 'desc')
-      .limit(5)
+      .limit(limitParam)
       .get();
 
-    // 3. Transform the data
+    // 4. Transform the data
     const news = snapshot.docs.map(doc => {
       const data = doc.data();
       
-      // Extract summary from HTML content: Strip tags and take first 20 words
+      // Extract summary
       const cleanText = data.content 
         ? data.content.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim() 
         : '';
-      const summary = cleanText.split(' ').slice(0, 20).join(' ') + (cleanText ? '...' : '');
+      const summary = cleanText.split(' ').slice(0, 25).join(' ') + (cleanText ? '...' : '');
 
       return {
-        title: data.headline || 'No Title',
-        summary: summary,
-        link: `${baseUrl}/article/${doc.id}`,
+        headline: data.headline || 'No Title', // mapped as requested
         imageUrl: data.imageUrl || '',
-        shareCardUrl: data.shareCardUrl || data.imageUrl || '', // New: Viral Card URL
+        shareCardUrl: data.shareCardUrl || data.imageUrl || '',
+        summary: summary,
+        url: `${baseUrl}/article/${doc.id}`, // mapped as requested
+        category: data.category, // helpful for debugging
         publishedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       };
     });
 
-    // 3. Return JSON response
     return NextResponse.json(news, { headers: HEADERS });
 
   } catch (error) {

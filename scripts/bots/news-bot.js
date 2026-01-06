@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const mandiBot = require('./mandi-bot');
 const aiWriter = require('../services/ai-writer');
 const imageGen = require('../services/image-gen');
 const newsCardGen = require('../services/news-card-gen');
@@ -175,6 +176,21 @@ async function fetchBhaskarNews(settings) {
 
         const scrapedData = await scrapeBhaskarArticle(item.link);
         if (!scrapedData) continue;
+
+        // 🌾 INTERCEPT: Check if this is actually Mandi Bhav news
+        const checkText = (scrapedData.headline + " " + scrapedData.body).toLowerCase();
+        if (checkText.includes('मंडी भाव') || checkText.includes('mandi bhav') || 
+            (checkText.includes('bhav') && checkText.includes('nagaur'))) {
+            
+            console.log(`\n  🌾 [News Bot] DETECTED MANDI NEWS: Redirecting to Mandi Bot logic...`);
+            
+            // Generate Enforced Date (Today's Date in IST)
+            const todayIST = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
+            
+            const mandiSuccess = await mandiBot.processRawMandiData(scrapedData.headline, scrapedData.body, item.link, settings, todayIST);
+            if (mandiSuccess) processedCount++;
+            continue; // Skip normal news processing
+        }
 
         console.log(`\n  ✨ [Bhaskar] NEW LATEST NEWS: ${scrapedData.headline}`);
         const success = await processAndSave(scrapedData.headline, scrapedData.body, item.link, 'Dainik Bhaskar', settings);

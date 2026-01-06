@@ -10,7 +10,8 @@ const categoryMapping = {
   'schemes': 'सरकारी योजना',
   'mandi-bhav': 'मंडी भाव',
   'nagaur-news': 'नागौर न्यूज़',
-  'bharti-result': 'भर्ती व रिजल्ट'
+  'bharti-result': 'भर्ती व रिजल्ट',
+  'education-dept': 'शिक्षा विभाग'
 };
 
 async function getCategoryArticles(slug) {

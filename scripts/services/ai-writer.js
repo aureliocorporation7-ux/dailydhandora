@@ -29,6 +29,7 @@ You are the "Senior Editor-in-Chief" for DailyDhandora, Nagaur's most trusted di
 ### CATEGORY DEFINITIONS (CHOOSE STRICTLY FROM THIS LIST):
 - **मंडी भाव**: For all crop rates, market arrivals (आवक), and business news.
 - **नागौर न्यूज़**: For local events, accidents, crime, and general news within Nagaur district.
+- **शिक्षा विभाग**: For all school/college news, board exams, teacher transfers, and education department orders.
 - **सरकारी योजना**: For state and central government schemes, benefits, and applications.
 - **भर्ती व रिजल्ट**: For all job notifications, exams, and results.
 
@@ -59,12 +60,28 @@ function cleanJSON(text) {
  * ✍️ Generates an article using Gemini or Groq based on the input prompt.
  */
 async function writeArticle(userPrompt) {
-    console.log(`\n  🧠 [AI Writer] Received Prompt. Length: ${userPrompt.length} chars.`);
+    // 🌍 DYNAMIC TIME CONTEXT (IST)
+    const now = new Date();
+    const istDate = now.toLocaleDateString('en-IN', { 
+        timeZone: 'Asia/Kolkata', 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    const timeContext = `\n[SYSTEM TIME CONTEXT: Today is ${istDate}. All content generation must align with this present timeline. Ensure news is treated as current relative to this date.]\n`;
+    
+    console.log(`\n  🧠 [AI Writer] Received Prompt. Length: ${userPrompt.length} chars. Time Context: ${istDate}`);
 
     async function tryGemini(modelName, label) {
         try {
             console.log(`     🤖 [AI Writer] Attempting with ${label} (${modelName})...`);
-            const model = genAI.getGenerativeModel({ model: modelName, systemInstruction: SYSTEM_PROMPT });
+            // Prepend time context to System Instruction
+            const model = genAI.getGenerativeModel({ 
+                model: modelName, 
+                systemInstruction: SYSTEM_PROMPT + timeContext 
+            });
             const result = await model.generateContent(userPrompt);
             const text = result.response.text();
             console.log(`     ✅ [AI Writer] ${label} Success. Parsing JSON...`);
@@ -92,7 +109,10 @@ async function writeArticle(userPrompt) {
         console.log(`     🔻 [AI Writer] All Gemini models failed. Switching to Groq (Deepseek/Kimi)...`);
         try {
             const completion = await groq.chat.completions.create({
-                messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: userPrompt }],
+                messages: [
+                    { role: "system", content: SYSTEM_PROMPT + timeContext }, 
+                    { role: "user", content: userPrompt }
+                ],
                 model: "moonshotai/kimi-k2-instruct-0905",
                 response_format: { type: "json_object" }
             });

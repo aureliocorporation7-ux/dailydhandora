@@ -1,162 +1,141 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 const aiWriter = require('../services/ai-writer');
 const imageGen = require('../services/image-gen');
 const newsCardGen = require('../services/news-card-gen');
 const dbService = require('../services/db-service');
 const { getCategoryFallback } = require('../../lib/stockImages');
 
-async function run() {
-    console.log("\n🌾 [Mandi Bot] Starting Execution...");
+const BHASKAR_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9,hi;q=0.8',
+    'Referer': 'https://www.google.com/'
+};
 
-    // 1. GATEKEEPER
-    const settings = await dbService.getBotSettings();
-    console.log(`  ⏰ Mandi Bot triggered. Admin Status: ${settings.isBotActive ? 'Active' : 'Disabled'}`);
-    console.log(`  ⚙️ [Admin] Mode: ${settings.botMode} | AI: ${settings.enableAI} | IMG: ${settings.enableImageGen}`);
-
-    if (!settings.isBotActive) {
-        console.log("  🛑 [Mandi Bot] Disabled by Admin. Exiting.");
-        return;
-    }
-
-    const url = "https://rajkisan.rajasthan.gov.in/Rajkisanweb/GetAllDataList";
-    const apmcs = ["MERTA CITY", "NAGOUR"];
-    let combinedText = "";
-    let apiDate = null;
-    let hasData = false;
-
-    const ratesForCard = [];
-
-    // 2. FETCH DATA FIRST
-    for (const apmc of apmcs) {
-        try {
-            console.log(`  ⏳ [Mandi Bot] Hitting API for ${apmc}...`);
-            const response = await axios.post(url, { Apmc: apmc, Commodity: "0", Category: "0" }, {
-                headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' }
-            });
-            const data = response.data;
-            if (!data || data.length === 0) {
-                console.log(`     ⚠️ [Mandi Bot] No data for ${apmc}.`);
-                continue;
-            }
-
-            const latestDateStr = data[0].latestTransactionDate;
-            if (!latestDateStr) continue;
-
-            if (!apiDate) apiDate = latestDateStr;
-
-            console.log(`     ✅ [Mandi Bot] Data found for ${apmc} (${latestDateStr}).`);
-            combinedText += `📍 ${apmc} मंडी भाव (दिनांक: ${latestDateStr}):\n`;
-            
-            data.forEach(item => {
-                if (item.latestTransactionDate === latestDateStr) {
-                    const fasal = item.commodityName || "Unknown";
-                    const min = item.minPrice || "0";
-                    const max = item.maxPrice || "0";
-                    const avg = item.modalPrice || "0";
-                    combinedText += `- ${fasal}: ₹${min} - ₹${max} (Avg: ₹${avg})\n`;
-
-                    // Collect for Card (Prioritize Jeera, Guar, Moong if possible, or just push top ones)
-                    // Simple logic: Push all unique crops, we slice in the generator
-                    if (!ratesForCard.find(r => r.crop === fasal)) {
-                         ratesForCard.push({ crop: fasal, min: min, max: max });
-                    }
-                }
-            });
-            combinedText += "\n";
-            hasData = true;
-        } catch (e) { 
-            console.error(`     ❌ [Mandi Bot] API Error: ${e.message}`); 
-        }
-    }
-
-    if (!hasData || !apiDate) {
-        console.log("  ⚠️ [Mandi Bot] No data found today. Exiting.");
-        return;
-    }
-
-    // 3. DUPLICATE CHECK
-    const safeDate = apiDate.replace(/[^a-zA-Z0-9-]/g, '-'); 
-    const uniqueUrl = `https://dailydhandora.com/mandi-update/${safeDate}`;
-    
-    const isDuplicate = await dbService.checkDuplicate('articles', 'sourceUrl', uniqueUrl);
-    if (isDuplicate) {
-        console.log(`  ⚠️ [Mandi Bot] Update for ${apiDate} already exists. Skipping.`);
-        return;
-    }
-
-    console.log("  🧠 [Mandi Bot] Sending data to AI Writer...");
-
-    // 4. AI WRITER
-    let aiData;
-    if (settings.enableAI) {
-        const prompt = `
-        Here is the raw Mandi Bhav data for Nagaur and Merta City:
-        ${combinedText}
-
-        Please write a news update for farmers in Hindi.
-        Headline MUST include the date: "${apiDate}".
-        Headline Example: "Nagaur & Merta Mandi Bhav Update (${apiDate})"
-        Use a table or list for the rates.
-        Category: "Mandi Bhav"
-        `;
-        aiData = await aiWriter.writeArticle(prompt);
-    } else {
-         console.log("  ⚠️ [Mandi Bot] AI Disabled. Using raw dump.");
-         aiData = {
-             headline: `Mandi Bhav Update (${apiDate})`,
-             content: `<pre>${combinedText}</pre>`,
-             tags: ['Mandi Bhav'],
-             category: 'मंडी भाव'
-         };
-    }
-
-    if (!aiData) return;
-
-    // 5. IMAGE GEN
-    let imageUrl = null;
-    if (settings.enableImageGen && aiData.image_prompt) {
-        console.log("  🎨 [Mandi Bot] Generating Image...");
-        imageUrl = await imageGen.generateImage(aiData.image_prompt);
-    }
-    
-    if (!imageUrl) {
-        imageUrl = getCategoryFallback('Mandi Bhav');
-    }
-
-    // 🎴 GENERATE MANDI CARD
-    let shareCardUrl = null;
-    try {
-        if (ratesForCard.length > 0) {
-            console.log("     🎨 [Mandi Bot] Generating Rate Card...");
-            const cardBuffer = await newsCardGen.generateMandiCard(ratesForCard, apiDate);
-            if (cardBuffer) {
-                shareCardUrl = await imageGen.uploadToImgBB(cardBuffer);
-                if (shareCardUrl) console.log("     ✅ [Mandi Bot] Rate Card Created & Uploaded!");
-            }
-        }
-    } catch (e) {
-        console.error(`     ⚠️ [Mandi Bot] Card Gen Failed: ${e.message}`);
-    }
-
-    // 6. SAVE
-    const articleData = {
-        headline: aiData.headline,
-        content: aiData.content
-            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/^\* (.*$)/gim, '<li>$1</li>'),
-        tags: [...(aiData.tags || []), 'Mandi Bhav', 'Nagaur', 'Merta', `Date: ${apiDate}`],
-        category: 'मंडी भाव',
-        sourceUrl: uniqueUrl,
-        imageUrl: imageUrl,
-        shareCardUrl: shareCardUrl || imageUrl, // Fallback
-        status: settings.articleStatus,
-        author: 'MandiBot'
-    };
-
-    console.log(`  💾 [Mandi Bot] Saving to Firestore...`);
-    await dbService.saveDocument('articles', articleData);
-    console.log(`  🎉 [Mandi Bot] SUCCESS! Saved: "${aiData.headline}"`);
+async function scrapeBhaskarArticle(url) {
+    // PASSIVE MODE: Helper kept for potential manual use, but not used in loop.
+    return null;
 }
 
-module.exports = { run };
+async function run() {
+    console.log("\n🌾 [Mandi Bot] Mode: PASSIVE (Interceptor Standby)");
+    console.log("     ℹ️ Waiting for News Bot to feed Mandi updates...");
+    
+    // Heartbeat update only
+    const settings = await dbService.getBotSettings();
+    if (settings.isBotActive) {
+        console.log("     ✅ Bot is Active & Ready.");
+    }
+}
+
+/**
+ * 🔄 SHARED: Process unstructured Mandi text (fed by News Bot)
+ * extracts rates, generates card, and saves.
+ */
+async function processRawMandiData(rawHeadline, rawBody, sourceUrl, settings, enforcedDate = null) {
+    console.log(`\n  🌾 [Mandi Bot] Processing data from: ${sourceUrl}`);
+
+    // Context Configuration
+    const now = new Date();
+    const todayIST = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
+    const todayYMD = now.toISOString().split('T')[0];
+
+    const yest = new Date(now);
+    yest.setDate(yest.getDate() - 1);
+    const yesterdayIST = yest.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
+    
+    // We pass Today as the anchor, but the prompt handles the window.
+    console.log(`     📅 Smart Date Window: ${yesterdayIST} to ${todayIST}`);
+
+    // 1. AI WRITER & EXTRACTION
+    const prompt = `
+    ROLE: You are the Mandi Market Analyst for 'DailyDhandora'.
+    
+    CRITICAL CONTEXT:
+    Today is: ${todayIST}
+    Yesterday was: ${yesterdayIST}
+    
+    SOURCE MATERIAL:
+    Headline: ${rawHeadline}
+    Content: ${rawBody.substring(0, 3000)}
+    
+    TASK:
+    1. Extract Mandi Rates (Bhav).
+    2. VALIDITY CHECK (Smart Window):
+       - Accept rates if they are for TODAY OR YESTERDAY.
+       - If the text EXPLICITLY mentions a date OLDER than ${yesterdayIST} (more than 48h ago), RETURN NULL.
+       - If NO specific date is mentioned, ASSUME they are fresh/latest and valid.
+    3. Extract the effective date of the rates. If unknown, use Today's date (${todayYMD}).
+    
+    OUTPUT JSON FORMAT (Return NULL if older than 48h):
+    {
+      "headline": "Nagaur/Merta Mandi Bhav Update (DD-MM-YYYY)", 
+      "content": "HTML body with <ul><li> for rates.",
+      "rates": [ 
+         { "crop": "Jeera", "min": "5000", "max": "6000" }
+      ],
+      "tags": ["Mandi Bhav", "Nagaur"],
+      "date": "YYYY-MM-DD" 
+    }
+    `;
+
+    const aiData = await aiWriter.writeArticle(prompt);
+    if (!aiData || !aiData.headline) {
+        console.log("     ❌ [Mandi Bot] AI Rejected (Data too old or invalid).");
+        return false;
+    }
+
+    const detectedDate = aiData.date || todayYMD;
+
+    // 2. GENERATE CARD (If rates found)
+    let shareCardUrl = null;
+    let imageUrl = null;
+
+    if (aiData.rates && aiData.rates.length > 0) {
+        console.log(`     🎨 [Mandi Bot] Generating Rate Card for ${aiData.rates.length} crops...`);
+        try {
+            const cardBuffer = await newsCardGen.generateMandiCard(aiData.rates, detectedDate);
+            if (cardBuffer) {
+                shareCardUrl = await imageGen.uploadToImgBB(cardBuffer);
+                imageUrl = shareCardUrl; // Use card as main image too
+            }
+        } catch (e) {
+            console.error(`     ⚠️ [Mandi Bot] Rate Card Gen Failed: ${e.message}`);
+        }
+    }
+
+    // Fallback Image
+    if (!imageUrl) {
+        if (settings.enableImageGen && settings.enableAI) {
+            imageUrl = await imageGen.generateImage(`Busy indian grain market, sacks of crops, farmers trading, realistic, 4k`);
+        } else {
+            imageUrl = getCategoryFallback('Mandi Bhav');
+        }
+    }
+
+    // 3. SAVE
+    const articleData = {
+        headline: aiData.headline,
+        content: aiData.content,
+        tags: [...(aiData.tags || []), 'Mandi Bhav', `Rates: ${detectedDate}`],
+        category: 'मंडी भाव',
+        sourceUrl: sourceUrl,
+        imageUrl: imageUrl,
+        shareCardUrl: shareCardUrl || imageUrl,
+        status: settings.articleStatus,
+        author: 'MandiBot (via News)'
+    };
+
+    const isDuplicate = await dbService.checkDuplicate('articles', 'headline', aiData.headline);
+    if (isDuplicate) {
+        console.log("     ⚠️ [Mandi Bot] Duplicate headline. Skipping save.");
+        return false;
+    }
+
+    await dbService.saveDocument('articles', articleData);
+    console.log(`     ✅ [Mandi Bot] Saved External Mandi Update: ${aiData.headline}`);
+    return true;
+}
+
+module.exports = { run, processRawMandiData };

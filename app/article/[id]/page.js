@@ -77,6 +77,8 @@ async function getRelatedArticles(category, currentId) {
     }
 }
 
+const POSTER_CATEGORIES = ['मंडी भाव', 'शिक्षा विभाग', 'भर्ती व रिजल्ट', 'Mandi Bhav', 'Education', 'सरकारी योजना'];
+
 export default async function ArticlePage({ params }) {
   const { id } = await params;
   const article = await getArticle(id);
@@ -96,6 +98,7 @@ export default async function ArticlePage({ params }) {
   }
 
   const relatedArticles = await getRelatedArticles(article.category, article.id);
+  const isPosterMode = POSTER_CATEGORIES.includes(article.category);
 
   // SEO: NewsArticle Schema
   const jsonLd = {
@@ -122,22 +125,51 @@ export default async function ArticlePage({ params }) {
 
       <article className="max-w-4xl mx-auto px-4 py-12">
         <ViewTracker id={article.id} />
-        <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden shadow-2xl border border-neutral-800">
-          <Image
-            src={article.imageUrl}
-            alt={article.headline || 'Article image'}
-            fill
-            className="object-cover"
-            priority
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-          <div className="absolute bottom-6 left-6 right-6">
-             <span className="bg-primary text-white text-xs font-bold px-3 py-1 rounded-full mb-3 inline-block shadow-md">
-                {article.category}
-             </span>
-             <h1 className="text-3xl md:text-4xl font-bold leading-tight drop-shadow-lg">{article.headline}</h1>
-          </div>
-        </div>
+
+        {/* 🎨 CONDITIONAL LAYOUT LOGIC */}
+        {isPosterMode ? (
+            // Option A: CLEAN LAYOUT (For Posters)
+            <div className="mb-8">
+                {/* Image Block - Fluid Visibility */}
+                <div className="w-full mb-6 rounded-lg overflow-hidden shadow-2xl border border-neutral-800 bg-neutral-900/50">
+                    <Image
+                        src={article.imageUrl}
+                        alt={article.headline || 'Article image'}
+                        width={1200}
+                        height={675}
+                        style={{ width: '100%', height: 'auto', display: 'block' }}
+                        className="rounded-lg"
+                        priority
+                    />
+                </div>
+                {/* Text Block - Below Image */}
+                <div className="px-2">
+                    <span className="bg-primary/20 text-primary text-sm font-bold px-3 py-1 rounded-full mb-4 inline-block border border-primary/30">
+                        {article.category}
+                    </span>
+                    <h1 className="text-3xl md:text-5xl font-bold leading-tight text-white mb-2">{article.headline}</h1>
+                    <p className="text-gray-400 text-sm mt-2">Posted on {new Date(article.createdAt).toLocaleDateString('hi-IN', {year: 'numeric', month: 'long', day: 'numeric'})}</p>
+                </div>
+            </div>
+        ) : (
+            // Option B: HERO LAYOUT (For Standard News)
+            <div className="relative w-full h-96 mb-8 rounded-lg overflow-hidden shadow-2xl border border-neutral-800 group">
+                <Image
+                    src={article.imageUrl}
+                    alt={article.headline || 'Article image'}
+                    fill
+                    className="object-cover transition-transform duration-700 group-hover:scale-105"
+                    priority
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+                <div className="absolute bottom-6 left-6 right-6">
+                    <span className="bg-primary text-white text-xs font-bold px-3 py-1 rounded-full mb-3 inline-block shadow-md">
+                        {article.category}
+                    </span>
+                    <h1 className="text-3xl md:text-4xl font-bold leading-tight drop-shadow-lg text-white">{article.headline}</h1>
+                </div>
+            </div>
+        )}
 
         <div className="flex justify-between items-center gap-4 mb-8 bg-neutral-900/50 p-4 rounded-xl border border-white/5">
              <div className="flex items-center gap-3">

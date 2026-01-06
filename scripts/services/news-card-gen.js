@@ -13,22 +13,34 @@ const LOGO_PATH = path.join(process.cwd(), 'public', 'logo.png');
 async function ensureFont() {
     if (fs.existsSync(FONT_PATH)) return;
     console.log("  📥 [Card Gen] Downloading Hindi Font...");
-    const response = await axios({ url: FONT_URL, responseType: 'stream' });
-    const writer = fs.createWriteStream(FONT_PATH);
-    response.data.pipe(writer);
-    return new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-    });
+    try {
+        const response = await axios({ url: FONT_URL, responseType: 'stream' });
+        const writer = fs.createWriteStream(FONT_PATH);
+        response.data.pipe(writer);
+        return new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+        });
+    } catch (e) {
+        console.error("  ❌ [Card Gen] Failed to download font:", e.message);
+    }
 }
 
 /**
- * ✂️ Wraps text into lines (Basic implementation, though foreignObject handles this better usually)
- * But since foreignObject support depends on the system's libraries (fontconfig), 
- * sometimes SVG <text> with manual spans is safer for pure Node environments.
- * However, we will try the SVG <text> approach with simple line breaking logic first.
+ * 🔄 Helper: Get Font as Base64 for reliable embedding
+ */
+function getFontBase64() {
+    if (fs.existsSync(FONT_PATH)) {
+        return fs.readFileSync(FONT_PATH).toString('base64');
+    }
+    return '';
+}
+
+/**
+ * ✂️ Wraps text into lines (Basic implementation)
  */
 function wrapText(text, maxCharsPerLine = 35) {
+    if (!text) return ["Update"];
     const words = text.split(' ');
     let lines = [];
     let currentLine = words[0];
@@ -54,6 +66,7 @@ function wrapText(text, maxCharsPerLine = 35) {
 async function generateNewsCard(imageUrl, headline) {
     try {
         await ensureFont();
+        const fontBase64 = getFontBase64();
 
         // 1. Download Background Image
         const inputImageBuffer = (await axios({ url: imageUrl, responseType: 'arraybuffer' })).data;
@@ -69,12 +82,10 @@ async function generateNewsCard(imageUrl, headline) {
         }
 
         // 4. Create SVG Overlay (Gradient + Text)
-        // We use SVG for the text rendering because it supports fonts better in Sharp.
         const lines = wrapText(headline, 40); // Wrap at ~40 chars
-        
-        // SVG Logic
         const lineHeight = 60;
-        const textStartY = height - 40 - (lines.length * lineHeight); // Position from bottom
+        const textBlockHeight = lines.length * lineHeight;
+        const textStartY = height - 60 - textBlockHeight; // Position from bottom with padding
         
         const textSvg = `
         <svg width="${width}" height="${height}">
@@ -82,33 +93,34 @@ async function generateNewsCard(imageUrl, headline) {
                 <style>
                     @font-face {
                         font-family: 'Noto Sans Devanagari';
-                        src: url('${FONT_PATH}');
+                        src: url(data:font/ttf;base64,${fontBase64});
                     }
                     .title { 
                         fill: white; 
                         font-family: 'Noto Sans Devanagari', sans-serif; 
                         font-size: 48px; 
                         font-weight: bold;
-                        text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+                        text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
                     }
                 </style>
                 <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="50%" style="stop-color:rgb(0,0,0);stop-opacity:0" />
-                    <stop offset="100%" style="stop-color:rgb(0,0,0);stop-opacity:0.9" />
+                    <stop offset="0%" style="stop-color:rgb(0,0,0);stop-opacity:0" />
+                    <stop offset="40%" style="stop-color:rgb(0,0,0);stop-opacity:0.6" />
+                    <stop offset="100%" style="stop-color:rgb(0,0,0);stop-opacity:0.95" />
                 </linearGradient>
             </defs>
             
-            <!-- Gradient Overlay (Bottom Half) -->
+            <!-- Gradient Overlay (Bottom Half for readability) -->
             <rect x="0" y="${height * 0.4}" width="${width}" height="${height * 0.6}" fill="url(#grad)" />
             
+            <!-- Branding Tag -->
+            <rect x="40" y="${textStartY - 70}" width="220" height="40" rx="5" fill="#DC2626" />
+            <text x="150" y="${textStartY - 43}" font-family="sans-serif" font-size="20" fill="white" text-anchor="middle" font-weight="bold">DAILY DHANDORA</text>
+
             <!-- Text Lines -->
             ${lines.map((line, i) => 
                 `<text x="40" y="${textStartY + (i * lineHeight)}" class="title">${line}</text>`
             ).join('')}
-            
-            <!-- Branding Tag -->
-            <rect x="40" y="${textStartY - 60}" width="160" height="40" rx="5" fill="#DC2626" />
-            <text x="120" y="${textStartY - 33}" font-family="sans-serif" font-size="20" fill="white" text-anchor="middle" font-weight="bold">DAILY DHANDORA</text>
         </svg>
         `;
 
@@ -142,15 +154,23 @@ async function generateNewsCard(imageUrl, headline) {
 async function generateMandiCard(rates, date) {
     try {
         await ensureFont();
+        const fontBase64 = getFontBase64();
 
         const width = 1200;
         const height = 675;
 
-        // Background: Solid Green Gradient or Texture
-        // We'll create a simple green gradient background using SVG
+        // SVG Construction
         const bgSvg = `
         <svg width="${width}" height="${height}">
             <defs>
+                <style>
+                    @font-face {
+                        font-family: 'Noto Sans Devanagari';
+                        src: url(data:font/ttf;base64,${fontBase64});
+                    }
+                    .header-text { font-family: 'Noto Sans Devanagari', sans-serif; font-weight: bold; }
+                    .row-text { font-family: 'Noto Sans Devanagari', sans-serif; font-weight: bold; }
+                </style>
                 <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" style="stop-color:#14532d;stop-opacity:1" /> <!-- Dark Green -->
                     <stop offset="100%" style="stop-color:#166534;stop-opacity:1" /> <!-- Green -->
@@ -159,16 +179,16 @@ async function generateMandiCard(rates, date) {
             <rect width="${width}" height="${height}" fill="url(#bgGrad)" />
             
             <!-- Header -->
-            <rect x="0" y="0" width="${width}" height="100" fill="#facc15" /> <!-- Yellow Header -->
-            <text x="${width/2}" y="70" font-family="Noto Sans Devanagari" font-size="48" font-weight="bold" fill="#000" text-anchor="middle">
+            <rect x="0" y="0" width="${width}" height="100" fill="#facc15" />
+            <text x="${width/2}" y="70" class="header-text" font-size="48" fill="#000" text-anchor="middle">
                 मंडी भाव अपडेट - ${date}
             </text>
 
             <!-- Columns Header -->
             <rect x="100" y="130" width="1000" height="50" rx="10" fill="rgba(255,255,255,0.2)" />
-            <text x="150" y="165" font-family="Noto Sans Devanagari" font-size="32" fill="#fff" font-weight="bold">फसल</text>
-            <text x="600" y="165" font-family="Noto Sans Devanagari" font-size="32" fill="#fff" font-weight="bold" text-anchor="middle">न्यूनतम</text>
-            <text x="1050" y="165" font-family="Noto Sans Devanagari" font-size="32" fill="#fff" font-weight="bold" text-anchor="end">अधिकतम</text>
+            <text x="150" y="165" class="header-text" font-size="32" fill="#fff">फसल</text>
+            <text x="600" y="165" class="header-text" font-size="32" fill="#fff" text-anchor="middle">न्यूनतम</text>
+            <text x="1050" y="165" class="header-text" font-size="32" fill="#fff" text-anchor="end">अधिकतम</text>
         </svg>
         `;
 
@@ -176,7 +196,6 @@ async function generateMandiCard(rates, date) {
         let rowY = 220;
         let rowsSvg = "";
         
-        // Take top 6 crops only to fit
         const topRates = rates.slice(0, 6);
 
         topRates.forEach((item, i) => {
@@ -185,9 +204,9 @@ async function generateMandiCard(rates, date) {
             
             rowsSvg += `
                 <rect x="100" y="${rowY - 35}" width="1000" height="60" rx="5" ${bg} />
-                <text x="150" y="${rowY + 10}" font-family="Noto Sans Devanagari" font-size="36" fill="#fff" font-weight="bold">${item.crop}</text>
-                <text x="600" y="${rowY + 10}" font-family="Noto Sans Devanagari" font-size="36" fill="#fbbf24" font-weight="bold" text-anchor="middle">₹${item.min}</text>
-                <text x="1050" y="${rowY + 10}" font-family="Noto Sans Devanagari" font-size="36" fill="#4ade80" font-weight="bold" text-anchor="end">₹${item.max}</text>
+                <text x="150" y="${rowY + 10}" class="row-text" font-size="36" fill="#fff">${item.crop}</text>
+                <text x="600" y="${rowY + 10}" class="row-text" font-size="36" fill="#fbbf24" text-anchor="middle">₹${item.min}</text>
+                <text x="1050" y="${rowY + 10}" class="row-text" font-size="36" fill="#4ade80" text-anchor="end">₹${item.max}</text>
             `;
             rowY += 80;
         });
@@ -232,4 +251,104 @@ async function generateMandiCard(rates, date) {
     }
 }
 
-module.exports = { generateNewsCard, generateMandiCard };
+/**
+ * 🎓 Generates an "Education Update" card (Blue/Yellow Theme).
+ * @param {string} headline - The Hindi headline.
+ * @param {string} date - Date string.
+ * @returns {Promise<Buffer>} - The generated image buffer.
+ */
+async function generateEduCard(headline, date) {
+    try {
+        await ensureFont();
+        const fontBase64 = getFontBase64();
+
+        const width = 1200;
+        const height = 675;
+
+        // SVG Construction
+        const bgSvg = `
+        <svg width="${width}" height="${height}">
+            <defs>
+                <style>
+                    @font-face {
+                        font-family: 'Noto Sans Devanagari';
+                        src: url(data:font/ttf;base64,${fontBase64});
+                    }
+                    .header-text { font-family: 'Noto Sans Devanagari', sans-serif; font-weight: bold; }
+                    .main-text { font-family: 'Noto Sans Devanagari', sans-serif; font-weight: bold; }
+                </style>
+                <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" /> <!-- Royal Blue -->
+                    <stop offset="100%" style="stop-color:#172554;stop-opacity:1" /> <!-- Darker Blue -->
+                </linearGradient>
+            </defs>
+            <rect width="${width}" height="${height}" fill="url(#bgGrad)" />
+            
+            <!-- Header -->
+            <rect x="0" y="0" width="${width}" height="100" fill="#facc15" /> <!-- Yellow -->
+            <text x="${width/2}" y="70" class="header-text" font-size="48" fill="#000" text-anchor="middle">
+                राजस्थान शिक्षा विभाग अपडेट
+            </text>
+
+            <!-- Date Badge -->
+            <rect x="${width - 250}" y="120" width="220" height="40" rx="20" fill="rgba(255,255,255,0.2)" />
+            <text x="${width - 140}" y="148" font-family="sans-serif" font-size="20" fill="#fff" text-anchor="middle" font-weight="bold">
+                ${date}
+            </text>
+
+            <!-- Central Content Box -->
+            <rect x="100" y="200" width="1000" height="300" rx="15" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.3)" stroke-width="2" />
+            
+            <!-- Headline Wrapped -->
+            ${(() => {
+                const lines = wrapText(headline, 35); // Wrap tighter for center box
+                let textSvg = '';
+                let startY = 280;
+                if (lines.length > 3) startY = 250; // Adjust if long
+                
+                lines.forEach((line, i) => {
+                    textSvg += `<text x="${width/2}" y="${startY + (i * 70)}" class="main-text" font-size="52" fill="#fff" text-anchor="middle">${line}</text>`;
+                });
+                return textSvg;
+            })()}
+
+            <!-- Footer -->
+             <text x="${width/2}" y="${height - 30}" font-family="sans-serif" font-size="24" fill="#cbd5e1" text-anchor="middle">
+                DailyDhandora.com - Education Portal
+             </text>
+        </svg>
+        `;
+
+        // Composite Logo
+        let logoBuffer = null;
+        if (fs.existsSync(LOGO_PATH)) {
+            logoBuffer = await sharp(LOGO_PATH).resize(120).toBuffer();
+        }
+        
+        const compositeOps = [
+             { input: Buffer.from(bgSvg), top: 0, left: 0 }
+        ];
+
+        if (logoBuffer) {
+             compositeOps.push({ input: logoBuffer, top: 10, left: 20 });
+        }
+
+        return await sharp({
+            create: {
+                width: width,
+                height: height,
+                channels: 4,
+                background: { r: 0, g: 0, b: 0, alpha: 0 }
+            }
+        })
+        .composite(compositeOps)
+        .png()
+        .toBuffer();
+
+    } catch (e) {
+        console.error("❌ [Edu Card] Error:", e);
+        return null;
+    }
+}
+
+module.exports = { generateNewsCard, generateMandiCard, generateEduCard };

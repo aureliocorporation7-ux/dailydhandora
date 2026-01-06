@@ -7,12 +7,14 @@ if (process.env.CI) {
 const mandiBot = require('./scripts/bots/mandi-bot');
 const newsBot = require('./scripts/bots/news-bot');
 const schemeBot = require('./scripts/bots/scheme-bot');
+const eduBot = require('./scripts/bots/edu-bot');
 
 // 🛡️ HEARTBEAT SYSTEM: Tracks when bots last ran
 const botStatus = {
     news: { lastRun: Date.now(), intervalMs: 15 * 60 * 1000, name: 'News Bot' },
     mandi: { lastRun: Date.now(), intervalMs: 24 * 60 * 60 * 1000, name: 'Mandi Bot' },
-    scheme: { lastRun: Date.now(), intervalMs: 24 * 60 * 60 * 1000, name: 'Scheme Bot' }
+    scheme: { lastRun: Date.now(), intervalMs: 24 * 60 * 60 * 1000, name: 'Scheme Bot' },
+    edu: { lastRun: Date.now(), intervalMs: 30 * 60 * 1000, name: 'Edu Bot' }
 };
 
 /**
@@ -35,6 +37,7 @@ async function runAllBots() {
     await runBotSafe('mandi', mandiBot);
     await runBotSafe('news', newsBot);
     await runBotSafe('scheme', schemeBot);
+    await runBotSafe('edu', eduBot);
     console.log('✅ [Bot] Initial Execution Finished.');
 }
 
@@ -49,6 +52,7 @@ setTimeout(() => {
 setInterval(() => runBotSafe('mandi', mandiBot), botStatus.mandi.intervalMs);
 setInterval(() => runBotSafe('news', newsBot), botStatus.news.intervalMs);
 setInterval(() => runBotSafe('scheme', schemeBot), botStatus.scheme.intervalMs);
+setInterval(() => runBotSafe('edu', eduBot), botStatus.edu.intervalMs);
 
 // 3. 🛡️ THE WATCHDOG (Self-Healing Mechanism)
 // Checks every 5 minutes if any bot is stuck or dead.
@@ -65,7 +69,8 @@ setInterval(() => {
             console.error(`🚨 [Watchdog] CRITICAL: ${bot.name} looks stuck! Last run: ${new Date(bot.lastRun).toLocaleTimeString()}. Force Restarting...`);
             
             // ⚡ FORCE RESTART
-            runBotSafe(key, key === 'news' ? newsBot : key === 'mandi' ? mandiBot : schemeBot);
+            const botMap = { news: newsBot, mandi: mandiBot, scheme: schemeBot, edu: eduBot };
+            runBotSafe(key, botMap[key]);
         }
     });
 }, 5 * 60 * 1000); // Check every 5 minutes
