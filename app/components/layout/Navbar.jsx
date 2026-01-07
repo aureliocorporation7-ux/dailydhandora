@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import NotificationBell from '../NotificationBell';
+import PWAInstallButton from '../PWAInstallButton';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -24,11 +25,11 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3 group">
             <div className="relative h-12 w-12 sm:h-14 sm:w-14">
-                <img 
-                    src="/logo.png" 
-                    alt="DailyDhandora Logo" 
-                    className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-lg"
-                />
+              <img
+                src="/logo.png"
+                alt="DailyDhandora Logo"
+                className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-lg"
+              />
             </div>
             <div className="flex flex-col">
               <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent group-hover:from-primary group-hover:to-orange-400 transition-all duration-300 leading-none">
@@ -43,23 +44,25 @@ export default function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
             {menuItems.map((item, idx) => (
-              <Link 
-                key={idx} 
-                href={item.path} 
+              <Link
+                key={idx}
+                href={item.path}
                 className="text-white/70 hover:text-primary font-medium transition-colors duration-200 text-sm tracking-wide hover:bg-white/5 px-3 py-2 rounded-lg"
               >
                 {item.name}
               </Link>
             ))}
-            
+
             {/* Notification Bell */}
-            <div className="border-l border-white/10 pl-6">
-                <NotificationBell />
+            <div className="border-l border-white/10 pl-6 flex items-center space-x-4">
+              <PWAInstallButton />
+              <NotificationBell />
             </div>
           </div>
 
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center space-x-4">
+            <PWAInstallButton />
             <NotificationBell />
             <button
               onClick={() => setIsOpen(!isOpen)}
@@ -77,10 +80,10 @@ export default function Navbar() {
         <div className="md:hidden bg-neutral-900 border-t border-neutral-800 shadow-2xl absolute w-full left-0">
           <div className="px-4 pt-4 pb-6 space-y-3">
             {menuItems.map((item, idx) => (
-              <Link 
-                key={idx} 
-                href={item.path} 
-                onClick={() => setIsOpen(false)} 
+              <Link
+                key={idx}
+                href={item.path}
+                onClick={() => setIsOpen(false)}
                 className="block px-4 py-3 text-white hover:bg-neutral-800 rounded-lg"
               >
                 {item.name}

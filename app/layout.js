@@ -9,9 +9,18 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'DailyDhandora - ताज़ा खबरें हिंदी में',
   description: 'भारत की सबसे तेज़ हिंदी समाचार वेबसाइट',
+  manifest: '/manifest.json',
   icons: {
     icon: '/favicon.ico',
   },
+};
+
+export const viewport = {
+  themeColor: '#ff9900',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }) {
