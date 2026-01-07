@@ -11,7 +11,7 @@ async function getArticles() {
       .orderBy('createdAt', 'desc')
       .limit(20)
       .get();
-    
+
     const newsData = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
@@ -20,6 +20,7 @@ async function getArticles() {
         createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString()) : null,
         publishedAt: data.publishedAt ? (data.publishedAt.toDate ? data.publishedAt.toDate().toISOString() : new Date(data.publishedAt).toISOString()) : null,
         updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString()) : null,
+        audioGeneratedAt: data.audioGeneratedAt ? (data.audioGeneratedAt.toDate ? data.audioGeneratedAt.toDate().toISOString() : new Date(data.audioGeneratedAt).toISOString()) : null,
       };
     });
 
@@ -43,10 +44,10 @@ export default async function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {articles.map((article, index) => (
               <div key={article.id} className={index === 0 ? 'col-span-1 md:col-span-2' : ''}>
-                <ArticleCard 
-                  article={article} 
-                  index={index} 
-                  isFeatured={index === 0} 
+                <ArticleCard
+                  article={article}
+                  index={index}
+                  isFeatured={index === 0}
                   priority={index === 0}
                 />
               </div>

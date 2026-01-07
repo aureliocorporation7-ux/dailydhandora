@@ -5,6 +5,7 @@ const aiWriter = require('../services/ai-writer');
 const imageGen = require('../services/image-gen');
 const newsCardGen = require('../services/news-card-gen');
 const dbService = require('../services/db-service');
+const { generateAndStoreAudio } = require('../services/audio-gen');
 const { getCategoryFallback } = require('../../lib/stockImages');
 
 function sleep(ms) {
@@ -20,8 +21,8 @@ function isToday(dateStr) {
         const articleDate = new Date(dateStr);
         const today = new Date();
         return articleDate.getDate() === today.getDate() &&
-               articleDate.getMonth() === today.getMonth() &&
-               articleDate.getFullYear() === today.getFullYear();
+            articleDate.getMonth() === today.getMonth() &&
+            articleDate.getFullYear() === today.getFullYear();
     } catch (e) {
         return false;
     }
@@ -33,7 +34,7 @@ function isToday(dateStr) {
  */
 function sanitizeContent(text) {
     if (!text) return "";
-    
+
     // List of forbidden words (Case insensitive mostly via Regex)
     const blacklist = [
         /Dainik Bhaskar/gi,
@@ -57,7 +58,7 @@ function sanitizeContent(text) {
 
     // Clean up any double spaces or awkward punctuation left behind
     cleanText = cleanText.replace(/\s\s+/g, ' ').replace(/ \./g, '.').trim();
-    
+
     return cleanText;
 }
 
@@ -97,7 +98,7 @@ async function scrapeBhaskarArticle(url) {
 
         $('div').each((i, div) => {
             const pCount = $(div).find('p').length;
-            if (pCount > maxPTags && pCount < 50) { 
+            if (pCount > maxPTags && pCount < 50) {
                 maxPTags = pCount;
                 contentContainer = div;
             }
@@ -179,14 +180,14 @@ async function fetchBhaskarNews(settings) {
 
         // 🌾 INTERCEPT: Check if this is actually Mandi Bhav news
         const checkText = (scrapedData.headline + " " + scrapedData.body).toLowerCase();
-        if (checkText.includes('मंडी भाव') || checkText.includes('mandi bhav') || 
+        if (checkText.includes('मंडी भाव') || checkText.includes('mandi bhav') ||
             (checkText.includes('bhav') && checkText.includes('nagaur'))) {
-            
+
             console.log(`\n  🌾 [News Bot] DETECTED MANDI NEWS: Redirecting to Mandi Bot logic...`);
-            
+
             // Generate Enforced Date (Today's Date in IST)
             const todayIST = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
-            
+
             const mandiSuccess = await mandiBot.processRawMandiData(scrapedData.headline, scrapedData.body, item.link, settings, todayIST);
             if (mandiSuccess) processedCount++;
             continue; // Skip normal news processing
@@ -196,7 +197,7 @@ async function fetchBhaskarNews(settings) {
         const success = await processAndSave(scrapedData.headline, scrapedData.body, item.link, 'Dainik Bhaskar', settings);
         if (success) processedCount++;
 
-        if (processedCount >= 3) break; 
+        if (processedCount >= 3) break;
         await sleep(5000); // Polite delay
     }
 
@@ -218,9 +219,9 @@ async function scrapePatrikaArticle(url) {
 
         // --- STRICT DATE CHECK (Today Only) ---
         // Patrika uses JSON-LD or meta tags
-        let pubDate = $('meta[property="article:published_time"]').attr('content') || 
-                      $('meta[name="publish-date"]').attr('content');
-        
+        let pubDate = $('meta[property="article:published_time"]').attr('content') ||
+            $('meta[name="publish-date"]').attr('content');
+
         // Also check JSON-LD if meta fails
         if (!pubDate) {
             const ldJson = $('script[type="application/ld+json"]').html();
@@ -234,15 +235,15 @@ async function scrapePatrikaArticle(url) {
             console.log(`     📅 [Patrika] Skipping: Old news from ${pubDate}`);
             return null;
         }
-        
+
         $('script, style, nav, footer, header, .advertisement, .ads, .sidebar, .comments, .related-posts').remove();
-        
+
         let body = "";
         $('p').each((i, el) => {
             const text = $(el).text().trim();
             if (text.length > 50) body += text + "\n\n";
         });
-        
+
         const headline = $('h1').first().text().trim() || "Nagaur News";
 
         if (body.length > 100) return { headline, body };
@@ -292,7 +293,7 @@ async function fetchPatrikaNews(settings) {
         console.log(`\n  ✨ [Patrika] FRESH FALLBACK NEWS: "${scrapedData.headline}"`);
         const success = await processAndSave(scrapedData.headline, scrapedData.body, item.link, 'Patrika', settings);
         if (success) processedCount++;
-        
+
         if (processedCount >= 3) break;
         await sleep(5000);
     }
@@ -347,7 +348,7 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
     if (settings.enableImageGen && settings.enableAI && aiData.image_prompt) {
         imageUrl = await imageGen.generateImage(aiData.image_prompt);
     }
-    
+
     if (!imageUrl) {
         imageUrl = getCategoryFallback('नागौर न्यूज़');
     }
@@ -380,9 +381,25 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
         author: `NewsBot (${sourceName})`
     };
 
-    await dbService.saveDocument('articles', articleData);
-    console.log(`     ✅ [News Bot] SAVED: ${cleanHeadline}`);
-    return true;
+    const savedId = await dbService.saveDocument('articles', articleData);
+    if (savedId) {
+        console.log(`     ✅ [News Bot] SAVED: ${cleanHeadline} (ID: ${savedId})`);
+
+        // 🎙️ GENERATE AUDIO (ElevenLabs + Cloudinary)
+        // Now using the "Build-Safe" implementation with shared Firebase connection
+        try {
+            if (settings.enableAI && settings.enableAudioGen) { // Check Master Toggle
+                await generateAndStoreAudio(cleanContent, savedId);
+            } else {
+                console.log(`     🔇 [Audio] Skipped: Audio Gen is DISABLED in Settings.`);
+            }
+        } catch (audioErr) {
+            console.error(`     ⚠️ [Audio] Gen Failed: ${audioErr.message}`);
+        }
+
+        return true;
+    }
+    return false;
 }
 
 
@@ -411,7 +428,7 @@ async function run() {
     } else {
         console.log(`  🎉 [News Bot] Success! Processed ${bhaskarCount} articles from Bhaskar.`);
     }
-    
+
     console.log(`\n🎉 [News Bot] Cycle Finished.`);
 }
 

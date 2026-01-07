@@ -6,12 +6,13 @@ export async function GET() {
   try {
     const doc = await db.collection('settings').doc('global').get();
     let data = { botMode: 'auto', imageGenEnabled: true };
-    
+
     if (doc.exists) {
       const docData = doc.data();
       data = {
         botMode: docData.botMode || 'auto',
-        imageGenEnabled: docData.imageGenEnabled !== false // Default true if undefined
+        imageGenEnabled: docData.imageGenEnabled !== false, // Default true if undefined
+        enableAudioGen: docData.enableAudioGen !== false // Default true if undefined
       };
     }
     return NextResponse.json(data);
@@ -35,6 +36,10 @@ export async function POST(request) {
 
     if (typeof body.imageGenEnabled !== 'undefined') {
       updateData.imageGenEnabled = body.imageGenEnabled;
+    }
+
+    if (typeof body.enableAudioGen !== 'undefined') {
+      updateData.enableAudioGen = body.enableAudioGen;
     }
 
     await db.collection('settings').doc('global').set(updateData, { merge: true });

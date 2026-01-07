@@ -16,7 +16,7 @@ const categoryMapping = {
 
 async function getCategoryArticles(slug) {
   const hindiCategory = categoryMapping[slug];
-  
+
   if (!hindiCategory) return [];
 
   try {
@@ -26,7 +26,7 @@ async function getCategoryArticles(slug) {
       .orderBy('createdAt', 'desc')
       .limit(20)
       .get();
-    
+
     return snapshot.docs.map(doc => {
       const data = doc.data();
       return {
@@ -35,6 +35,7 @@ async function getCategoryArticles(slug) {
         createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString()) : null,
         publishedAt: data.publishedAt ? (data.publishedAt.toDate ? data.publishedAt.toDate().toISOString() : new Date(data.publishedAt).toISOString()) : null,
         updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString()) : null,
+        audioGeneratedAt: data.audioGeneratedAt ? (data.audioGeneratedAt.toDate ? data.audioGeneratedAt.toDate().toISOString() : new Date(data.audioGeneratedAt).toISOString()) : null,
       };
     });
   } catch (error) {
@@ -53,10 +54,10 @@ export default async function CategoryPage({ params }) {
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       <header className="sticky top-0 z-10 bg-[#0a0a0a]/80 backdrop-blur-sm border-b border-neutral-800 p-4">
         <div className="max-w-7xl mx-auto flex items-center">
-            <Link href="/" className="text-neutral-400 hover:text-white mr-4">
-                ← Back
-            </Link>
-            <h1 className="text-2xl font-bold capitalize text-primary">{hindiName} News</h1>
+          <Link href="/" className="text-neutral-400 hover:text-white mr-4">
+            ← Back
+          </Link>
+          <h1 className="text-2xl font-bold capitalize text-primary">{hindiName} News</h1>
         </div>
       </header>
 

@@ -8,7 +8,7 @@ export async function GET(request) {
 
   try {
     let query = db.collection('articles').orderBy('createdAt', 'desc').limit(50);
-    
+
     // Only apply status filter if provided
     if (status) {
       query = query.where('status', '==', status);
@@ -16,13 +16,16 @@ export async function GET(request) {
 
     const snapshot = await query.get();
     const articles = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            // Safely convert Timestamp to ISO string
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString()
-        };
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        // Safely convert Timestamp to ISO string
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : null,
+        publishedAt: data.publishedAt?.toDate ? data.publishedAt.toDate().toISOString() : null,
+        audioGeneratedAt: data.audioGeneratedAt?.toDate ? data.audioGeneratedAt.toDate().toISOString() : null,
+      };
     });
 
     return NextResponse.json({ articles });
@@ -38,21 +41,21 @@ export async function POST(request) {
     const { headline, content, imageUrl, category, status } = body;
 
     if (!headline || !content) {
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     const newArticle = {
-        headline,
-        content,
-        imageUrl: imageUrl || 'https://placehold.co/600x400/000000/FFFFFF/png?text=DailyDhandora',
-        category: category || 'Other',
-        status: status || 'published',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        publishedAt: status === 'published' ? new Date() : null,
-        author: 'Admin (Manual)', // Mark as manually created
-        views: 0,
-        sourceUrl: 'https://dailydhandora.com' // Internal source
+      headline,
+      content,
+      imageUrl: imageUrl || 'https://placehold.co/600x400/000000/FFFFFF/png?text=DailyDhandora',
+      category: category || 'Other',
+      status: status || 'published',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      publishedAt: status === 'published' ? new Date() : null,
+      author: 'Admin (Manual)', // Mark as manually created
+      views: 0,
+      sourceUrl: 'https://dailydhandora.com' // Internal source
     };
 
     const docRef = await db.collection('articles').add(newArticle);
@@ -68,9 +71,9 @@ export async function PUT(request) {
   try {
     const body = await request.json();
     const { id, action } = body;
-    
+
     if (action === 'publish') {
-      await db.collection('articles').doc(id).update({ 
+      await db.collection('articles').doc(id).update({
         status: 'published',
         publishedAt: new Date()
       });
@@ -78,15 +81,15 @@ export async function PUT(request) {
     }
 
     if (action === 'update') {
-        const { headline, content, imageUrl, category } = body;
-        await db.collection('articles').doc(id).update({
-            headline,
-            content,
-            imageUrl,
-            category,
-            updatedAt: new Date()
-        });
-        return NextResponse.json({ success: true });
+      const { headline, content, imageUrl, category } = body;
+      await db.collection('articles').doc(id).update({
+        headline,
+        content,
+        imageUrl,
+        category,
+        updatedAt: new Date()
+      });
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -100,7 +103,7 @@ export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    
+
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });
 
     await db.collection('articles').doc(id).delete();

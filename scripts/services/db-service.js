@@ -1,7 +1,7 @@
 if (process.env.CI) {
-  require('dotenv').config({ path: '.env' });
+    require('dotenv').config({ path: '.env' });
 } else {
-  require('dotenv').config({ path: '.env.local', override: true });
+    require('dotenv').config({ path: '.env.local', override: true });
 }
 
 const { db, admin } = require('../../lib/firebase');
@@ -70,6 +70,7 @@ async function getBotSettings() {
                 botMode: botMode,
                 isBotActive: botMode !== 'off',
                 enableImageGen: data.imageGenEnabled !== false,
+                enableAudioGen: data.enableAudioGen !== false, // Default true if undefined
                 articleStatus: botMode === 'manual' ? 'draft' : 'published',
                 enableAI: true // Assumed true as no UI toggle exists yet
             };
@@ -82,6 +83,7 @@ async function getBotSettings() {
         botMode: 'auto',
         isBotActive: true,
         enableImageGen: true,
+        enableAudioGen: true,
         articleStatus: 'published',
         enableAI: true
     };
