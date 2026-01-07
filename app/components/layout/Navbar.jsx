@@ -9,12 +9,12 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
-    { name: 'होम', path: '/' },
-    { name: 'मंडी भाव', path: '/category/mandi-bhav' },
-    { name: 'नागौर न्यूज़', path: '/category/nagaur-news' },
-    { name: 'शिक्षा विभाग', path: '/category/education-dept' },
-    { name: 'सरकारी योजना', path: '/category/schemes' },
-    { name: 'भर्ती व रिजल्ट', path: '/category/bharti-result' },
+    { name: '🏠 होम', path: '/' },
+    { name: '🌾 मंडी भाव', path: '/category/mandi-bhav' },
+    { name: '📰 नागौर न्यूज़', path: '/category/nagaur-news' },
+    { name: '📚 शिक्षा विभाग', path: '/category/education-dept' },
+    { name: '🏛️ सरकारी योजना', path: '/category/schemes' },
+    { name: '🎓 भर्ती व रिजल्ट', path: '/category/bharti-result' },
   ];
 
   return (

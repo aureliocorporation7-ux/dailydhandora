@@ -8,6 +8,7 @@ export default function CategoriesPage() {
   const categories = [
     { name: 'मंडी भाव', icon: '🌾', slug: 'mandi-bhav' },
     { name: 'नागौर न्यूज़', icon: '📰', slug: 'nagaur-news' },
+    { name: 'शिक्षा विभाग', icon: '📚', slug: 'education-dept' },
     { name: 'सरकारी योजना', icon: '🏛️', slug: 'schemes' },
     { name: 'भर्ती व रिजल्ट', icon: '🎓', slug: 'bharti-result' },
   ];

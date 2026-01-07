@@ -26,9 +26,10 @@ export default function Footer() {
         <div>
           <h3 className="text-white font-bold mb-4 uppercase text-sm tracking-wider">Explore</h3>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/" className="hover:text-white transition-colors">🏠 होम (Home)</Link></li>
+            <li><Link href="/" className="hover:text-white transition-colors">🏠 होम</Link></li>
             <li><Link href="/category/mandi-bhav" className="hover:text-white transition-colors">🌾 मंडी भाव</Link></li>
             <li><Link href="/category/nagaur-news" className="hover:text-white transition-colors">📰 नागौर न्यूज़</Link></li>
+            <li><Link href="/category/education-dept" className="hover:text-white transition-colors">📚 शिक्षा विभाग</Link></li>
             <li><Link href="/category/schemes" className="hover:text-white transition-colors">🏛️ सरकारी योजना</Link></li>
             <li><Link href="/category/bharti-result" className="hover:text-white transition-colors">🎓 भर्ती व रिजल्ट</Link></li>
           </ul>
