@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const FONT_URL = "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf";
-const FONT_PATH = path.join(__dirname, 'NotoSansDevanagari-Bold.ttf');
+const FONT_PATH = path.join(process.cwd(), 'public', 'NotoSansDevanagari-Bold.ttf');
 const LOGO_PATH = path.join(process.cwd(), 'public', 'logo.png');
 
 /**
