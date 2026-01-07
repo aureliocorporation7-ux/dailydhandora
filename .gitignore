@@ -44,3 +44,12 @@ history.txt
 
 # Backup
 _backup/
+
+# Generated Media
+*.mp3
+*.wav
+
+# Debug Scripts
+scripts/debug*
+scripts/test*
+scripts/verify*
