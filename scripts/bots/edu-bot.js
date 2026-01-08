@@ -65,23 +65,37 @@ async function run() {
         return;
     }
 
-    // 2. TARGETS
-    // We target Nagaur feed because it often contains state-level edu news too (Bikaner/Jaipur orders often appear in local feeds).
+    // 2. TARGETS - Local + State level (all goes to शिक्षा विभाग category)
     const targets = [
-        { name: "Nagaur District", url: "https://www.bhaskar.com/local/rajasthan/nagaur" }
+        { name: "Nagaur District", url: "https://www.bhaskar.com/local/rajasthan/nagaur" },
+        { name: "Merta", url: "https://www.bhaskar.com/local/rajasthan/nagaur/merta" },
+        { name: "Rajasthan State", url: "https://www.bhaskar.com/rajasthan" }  // Pay Commission, DA news
     ];
 
+    // 📚 EDUCATION KEYWORDS (Comprehensive)
     const eduKeywords = [
-        'shala darpan', 'शाला दर्पण',
-        'rpsc', 'rsmssb',
-        'reet', 'रीट',
-        'shiksha', 'शिक्षा',
-        'teacher', 'शिक्षक',
-        'school', 'स्कूल',
-        'exam', 'परीक्षा',
-        'result', 'परिणाम',
-        'bikaner nideshalaya', 'बीकानेर निदेशालय',
-        'doep', 'शिक्षा विभाग'
+        // शाला दर्पण & Education Dept
+        'shala darpan', 'शाला दर्पण', 'shiksha', 'शिक्षा', 'school', 'स्कूल',
+        'teacher', 'शिक्षक', 'bikaner nideshalaya', 'बीकानेर निदेशालय', 'doep', 'शिक्षा विभाग',
+
+        // Exams & Results
+        'rpsc', 'rsmssb', 'reet', 'रीट', 'exam', 'परीक्षा', 'result', 'परिणाम',
+        'admit card', 'प्रवेश पत्र', 'answer key', 'उत्तर कुंजी',
+        'cut off', 'कट ऑफ', 'merit list', 'मेरिट लिस्ट',
+
+        // Recruitment & Jobs (भर्ती)
+        'bharti', 'भर्ती', 'vacancy', 'रिक्ति', 'recruitment', 'नौकरी',
+        'patwari', 'पटवारी', 'gram sevak', 'ग्राम सेवक', 'ldc', 'clerk', 'लिपिक',
+        'constable', 'सिपाही', 'police', 'पुलिस', 'army', 'सेना', 'railway', 'रेलवे',
+
+        // 💰 Pay Commission & Salary (NEW!)
+        'pay commission', 'पे कमीशन', 'वेतन आयोग', '8th pay', '8वां वेतन',
+        'da', 'महंगाई भत्ता', 'dearness allowance', 'hra', 'मकान भत्ता',
+        'salary', 'सैलरी', 'वेतन', 'pension', 'पेंशन', 'increment', 'वेतन वृद्धि',
+        'fitment factor', 'फिटमेंट फैक्टर', 'arrear', 'एरियर', 'बकाया',
+
+        // Government Employee Related
+        'sarkari', 'सरकारी', 'employee', 'कर्मचारी', 'staff', 'स्टाफ'
     ];
 
     const rajasthanKeywords = [
@@ -130,12 +144,12 @@ async function run() {
                 const article = await scrapeBhaskarArticle(link);
 
                 if (article && article.body.length > 100) {
-                    // 🛑 DATE FRESHNESS CHECK (48h Window)
+                    // 🛑 DATE FRESHNESS CHECK (24h Window)
                     if (article.publishedTime) {
                         const pubDate = new Date(article.publishedTime);
                         const now = new Date();
                         const diffHours = (now - pubDate) / (1000 * 60 * 60);
-                        if (diffHours > 48) {
+                        if (diffHours > 24) {
                             console.log(`     📅 [Edu Bot] Skipping OLD news (${diffHours.toFixed(1)}h old).`);
                             continue;
                         }
