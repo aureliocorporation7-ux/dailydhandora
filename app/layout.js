@@ -12,6 +12,12 @@ export const metadata = {
   manifest: '/manifest.json',
   icons: {
     icon: '/favicon.ico',
+    apple: '/icon-192x192.png',  // iOS PWA icon
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'DailyDhandora',
   },
 };
 
