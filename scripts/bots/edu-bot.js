@@ -19,17 +19,17 @@ async function scrapeBhaskarArticle(url) {
         const $ = cheerio.load(data);
         const headline = $('h1').first().text().trim();
         let bodyText = '';
-        
+
         // 1. DATE EXTRACTION
-        const publishedTime = $('meta[property="article:published_time"]').attr('content') || 
-                              $('meta[name="publish-date"]').attr('content');
+        const publishedTime = $('meta[property="article:published_time"]').attr('content') ||
+            $('meta[name="publish-date"]').attr('content');
 
         // Bhaskar specific content extraction
         let maxPTags = 0;
         let contentContainer = null;
         $('div').each((i, div) => {
             const pCount = $(div).find('p').length;
-            if (pCount > maxPTags && pCount < 50) { 
+            if (pCount > maxPTags && pCount < 50) {
                 maxPTags = pCount;
                 contentContainer = div;
             }
@@ -47,7 +47,7 @@ async function scrapeBhaskarArticle(url) {
                 bodyText += $(p).text().trim() + '\n\n';
             });
         }
-        
+
         return { headline, body: bodyText, publishedTime };
     } catch (e) {
         console.error(`     ❌ [Edu Bot] Scrape Error: ${e.message}`);
@@ -72,19 +72,25 @@ async function run() {
     ];
 
     const eduKeywords = [
-        'shala darpan', 'शाला दर्पण', 
-        'rpsc', 'rsmssb', 
-        'reet', 'रीट', 
-        'shiksha', 'शिक्षा', 
-        'teacher', 'शिक्षक', 
-        'school', 'स्कूल', 
-        'exam', 'परीक्षा', 
-        'result', 'परिणाम', 
+        'shala darpan', 'शाला दर्पण',
+        'rpsc', 'rsmssb',
+        'reet', 'रीट',
+        'shiksha', 'शिक्षा',
+        'teacher', 'शिक्षक',
+        'school', 'स्कूल',
+        'exam', 'परीक्षा',
+        'result', 'परिणाम',
         'bikaner nideshalaya', 'बीकानेर निदेशालय',
         'doep', 'शिक्षा विभाग'
     ];
 
-    const rajasthanKeywords = ['rajasthan', 'nagaur', 'bikaner', 'jaipur', 'राजस्थान', 'नागौर', 'बीकानेर', 'जयपुर'];
+    const rajasthanKeywords = [
+        'rajasthan', 'nagaur', 'bikaner', 'jaipur', 'jodhpur', 'ajmer',
+        'राजस्थान', 'नागौर', 'बीकानेर', 'जयपुर', 'जोधपुर', 'अजमेर',
+        // Nagaur Tehsils & Towns
+        'degana', 'jayal', 'merta', 'didwana', 'ladnun', 'makrana', 'parbatsar', 'kuchaman', 'nawa', 'mundwa', 'khinvsar',
+        'डेगाना', ' जायल', 'मेड़ता', 'डीडवाना', 'लाडनूं', 'मकराना', 'परबतसर', 'कुचामन', 'नावा', 'मूंडवा', 'खींवसर'
+    ];
 
     let processedCount = 0;
 
@@ -93,20 +99,17 @@ async function run() {
         try {
             const { data } = await axios.get(`${target.url}?t=${Date.now()}`, { headers: BHASKAR_HEADERS });
             const $ = cheerio.load(data);
-            
+
             const potentialLinks = [];
 
             $('a').each((i, el) => {
                 const link = $(el).attr('href');
                 const title = $(el).text().toLowerCase();
-                
+
                 if (link && link.includes('/news/') && !link.includes('/rss/')) {
                     // 1. Check for Education Keywords
                     const hasEduKeyword = eduKeywords.some(k => title.includes(k));
-                    
-                    // 2. Security Check: Must be Rajasthan relevant
-                    // (The URL is already local/rajasthan, so implicitly yes, but good to be safe)
-                    
+
                     if (hasEduKeyword) {
                         const fullLink = link.startsWith('http') ? link : `https://www.bhaskar.com${link}`;
                         if (!potentialLinks.includes(fullLink)) {
@@ -125,37 +128,37 @@ async function run() {
 
                 console.log(`     🎯 [Edu Bot] Target Acquired: ${link}`);
                 const article = await scrapeBhaskarArticle(link);
-                
-                if (article && article.body.length > 100) {
-                     // 🛑 DATE FRESHNESS CHECK (48h Window)
-                     if (article.publishedTime) {
-                         const pubDate = new Date(article.publishedTime);
-                         const now = new Date();
-                         const diffHours = (now - pubDate) / (1000 * 60 * 60);
-                         if (diffHours > 48) {
-                             console.log(`     📅 [Edu Bot] Skipping OLD news (${diffHours.toFixed(1)}h old).`);
-                             continue;
-                         }
-                     }
 
-                     // Double check content
-                     const contentCheck = (article.headline + " " + article.body).toLowerCase();
-                     const isRajasthan = rajasthanKeywords.some(k => contentCheck.includes(k));
-                     
-                     if (isRajasthan) {
-                         const success = await processEduData(article.headline, article.body, link, settings);
-                         if (success) processedCount++;
-                     } else {
-                         console.log("     ⚠️ [Edu Bot] Rejected: Content not explicitly Rajasthan focused.");
-                     }
+                if (article && article.body.length > 100) {
+                    // 🛑 DATE FRESHNESS CHECK (48h Window)
+                    if (article.publishedTime) {
+                        const pubDate = new Date(article.publishedTime);
+                        const now = new Date();
+                        const diffHours = (now - pubDate) / (1000 * 60 * 60);
+                        if (diffHours > 48) {
+                            console.log(`     📅 [Edu Bot] Skipping OLD news (${diffHours.toFixed(1)}h old).`);
+                            continue;
+                        }
+                    }
+
+                    // Double check content (Include URL in check for location safety)
+                    const contentCheck = (article.headline + " " + article.body + " " + link).toLowerCase();
+                    const isRajasthan = rajasthanKeywords.some(k => contentCheck.includes(k));
+
+                    if (isRajasthan) {
+                        const success = await processEduData(article.headline, article.body, link, settings);
+                        if (success) processedCount++;
+                    } else {
+                        console.log("     ⚠️ [Edu Bot] Rejected: Content not explicitly Rajasthan focused.");
+                    }
                 }
-                
-                if (processedCount >= 2) break; 
+
+                if (processedCount >= 2) break;
             }
         } catch (e) {
             console.error(`     ❌ [Edu Bot] Scouting failed for ${target.name}: ${e.message}`);
         }
-        if (processedCount >= 2) break; 
+        if (processedCount >= 2) break;
     }
 
     if (processedCount === 0) {
@@ -191,7 +194,9 @@ async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
     1. Decode this news/order into a clear, viral update.
     2. Focus on: "What does this mean for me?" (e.g., School holiday? Exam date? Transfer list?).
     3. Use official terms: 'Bikaner Nideshalaya', 'Jaipur Sachivalaya', 'RPSC Ajmer'.
-    4. If 'Nagaur' is specifically mentioned, mark it as **🚨 URGENT FOR NAGAUR**.
+    3. Use official terms: 'Bikaner Nideshalaya', 'Jaipur Sachivalaya', 'RPSC Ajmer'.
+    4. If 'Nagaur' is mentioned with a Tehsil (e.g., Merta/Jayal), use "हमारे **[Tehsil]** संवाददाता" in the body.
+    5. **Sign-Off:** Start with Tehsil Match (Degana, Merta, etc.). Fallback to "हमारे नागौर संवाददाता". NEVER use village names.
     
     OUTPUT JSON FORMAT:
     {
@@ -234,7 +239,7 @@ async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
         headline: aiData.headline,
         content: aiData.content,
         tags: [...(aiData.tags || []), 'Education', 'Shiksha Vibhag'],
-        category: 'शिक्षा विभाग', 
+        category: 'शिक्षा विभाग',
         sourceUrl: sourceUrl,
         imageUrl: imageUrl,
         shareCardUrl: shareCardUrl || imageUrl,

@@ -19,10 +19,12 @@ function isToday(dateStr) {
     if (!dateStr) return false;
     try {
         const articleDate = new Date(dateStr);
-        const today = new Date();
-        return articleDate.getDate() === today.getDate() &&
-            articleDate.getMonth() === today.getMonth() &&
-            articleDate.getFullYear() === today.getFullYear();
+        const options = { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'numeric', year: 'numeric' };
+
+        const artDateStr = articleDate.toLocaleDateString('en-IN', options);
+        const todayStr = new Date().toLocaleDateString('en-IN', options);
+
+        return artDateStr === todayStr;
     } catch (e) {
         return false;
     }
@@ -128,37 +130,55 @@ async function scrapeBhaskarArticle(url) {
 }
 
 async function fetchBhaskarNews(settings) {
-    // Anti-Caching: Add timestamp to force fresh fetch
-    const listUrl = `https://www.bhaskar.com/local/rajasthan/nagaur?t=${Date.now()}`;
-    console.log(`  ⏳ [News Bot] 1. Checking PRIMARY: Dainik Bhaskar (Fresh Fetch)`);
+    // 🌐 MULTI-SOURCE: Scrape from Nagaur + Merta for comprehensive coverage
+    const sources = [
+        { url: `https://www.bhaskar.com/local/rajasthan/nagaur?t=${Date.now()}`, name: 'Nagaur', pattern: '/local/rajasthan/nagaur/news/' },
+        { url: `https://www.bhaskar.com/local/rajasthan/nagaur/merta?t=${Date.now()}`, name: 'Merta', pattern: '/local/rajasthan/nagaur/merta/news/' }
+    ];
+
+    console.log(`  ⏳ [News Bot] 1. Checking PRIMARY: Dainik Bhaskar (Nagaur + Merta)`);
 
     let articles = [];
-    try {
-        const { data } = await axios.get(listUrl, {
-            headers: {
-                ...BHASKAR_HEADERS,
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
-        });
-        const $ = cheerio.load(data);
 
-        $('a').each((i, el) => {
-            const link = $(el).attr('href');
-            if (link && link.includes('/local/rajasthan/nagaur/news/') && !link.includes('/rss/')) {
-                const fullLink = link.startsWith('http') ? link : `https://www.bhaskar.com${link}`;
-                if (!articles.find(a => a.link === fullLink)) {
-                    articles.push({ link: fullLink });
+    // Fetch from all sources
+    for (const source of sources) {
+        try {
+            const { data } = await axios.get(source.url, {
+                headers: {
+                    ...BHASKAR_HEADERS,
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
+                },
+                timeout: 15000
+            });
+            const $ = cheerio.load(data);
+
+            let sourceCount = 0;
+            $('a').each((i, el) => {
+                const link = $(el).attr('href');
+                // Accept links from both Nagaur and Merta news sections
+                if (link && (link.includes('/local/rajasthan/nagaur/news/') || link.includes('/local/rajasthan/nagaur/merta/news/')) && !link.includes('/rss/')) {
+                    const fullLink = link.startsWith('http') ? link : `https://www.bhaskar.com${link}`;
+                    if (!articles.find(a => a.link === fullLink)) {
+                        articles.push({ link: fullLink, source: source.name });
+                        sourceCount++;
+                    }
                 }
-            }
-        });
-    } catch (e) {
-        console.error(`  ❌ [Bhaskar] Failed to fetch list: ${e.message}`);
+            });
+            console.log(`     ✅ [${source.name}] Found ${sourceCount} articles`);
+        } catch (e) {
+            console.error(`     ❌ [${source.name}] Failed: ${e.message}`);
+            // Continue to next source instead of returning 0
+        }
+    }
+
+    if (articles.length === 0) {
+        console.log(`     ⚠️ No articles found from any source`);
         return 0;
     }
 
-    if (articles.length === 0) return 0;
+    console.log(`     📰 Total unique articles: ${articles.length}`);
 
     articles.sort((a, b) => {
         const getId = (url) => {
@@ -168,7 +188,7 @@ async function fetchBhaskarNews(settings) {
         return getId(b.link) - getId(a.link);
     });
 
-    const targetArticles = articles.slice(0, 5);
+    const targetArticles = articles.slice(0, 15); // Increased from 5 to 15 to find Mandi news
     let processedCount = 0;
 
     for (const item of targetArticles) {
@@ -180,8 +200,31 @@ async function fetchBhaskarNews(settings) {
 
         // 🌾 INTERCEPT: Check if this is actually Mandi Bhav news
         const checkText = (scrapedData.headline + " " + scrapedData.body).toLowerCase();
-        if (checkText.includes('मंडी भाव') || checkText.includes('mandi bhav') ||
-            (checkText.includes('bhav') && checkText.includes('nagaur'))) {
+
+        // Comprehensive Mandi Keywords (Hindi & English)
+        // CROPS: Jeera, Gwar, Moong, Isabgol, Saunf, Rayda, Sarson, Cotton
+        const cropKeywords = [
+            'jeera', 'moong', 'gwar', 'isabgol', 'saunf', 'cotton', 'rayda', 'sarson',
+            'जीरा', 'मूंग', 'ग्वार', 'ईसबगोल', 'सौंफ', 'कपास', 'रायड़ा', 'सरसों'
+        ];
+
+        // GENERAL TERMS: Mandi, Bhav, Krishi, Fasal, Boli, Rate
+        const generalKeywords = [
+            'mandi bhav', 'मंडी भाव', 'krishi upaj', 'कृषि उपज',
+            'bhav', 'भाव', 'fasal', 'फसल', 'boli', 'बोली', 'rate'
+        ];
+
+        // LOCATIONS: Nagaur, Merta (Hindi & English)
+        const locationKeywords = [
+            'nagaur', 'merta', 'नागौर', 'मेड़ता'
+        ];
+
+        // Logic: (Crop OR General) AND (Location In Text OR Location In Headline)
+        // We use lowercase match. JavaScript strings handle Devanagari matching well.
+        const isMandiTerm = [...cropKeywords, ...generalKeywords].some(k => checkText.includes(k));
+        const isLocation = locationKeywords.some(k => checkText.includes(k));
+
+        if (isMandiTerm && isLocation) {
 
             console.log(`\n  🌾 [News Bot] DETECTED MANDI NEWS: Redirecting to Mandi Bot logic...`);
 
@@ -197,7 +240,7 @@ async function fetchBhaskarNews(settings) {
         const success = await processAndSave(scrapedData.headline, scrapedData.body, item.link, 'Dainik Bhaskar', settings);
         if (success) processedCount++;
 
-        if (processedCount >= 3) break;
+        if (processedCount >= 6) break; // Increased limit to allow more news + mandi
         await sleep(5000); // Polite delay
     }
 
@@ -324,7 +367,12 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
     3. **Details:** Use bullet points (<ul><li>) for key facts or timeline.
     4. **Tone:** Professional, Objective, Journalistic. No flowery language or "AI fluff".
     5. **Accuracy:** DO NOT invent facts. If date/time is missing, don't guess.
-    6. **ORIGINALITY RULE (CRITICAL):** NEVER mention the source name "${sourceName}", "Dainik Bhaskar", "Patrika" or scraping text. Write as if YOU (DailyDhandora) are the original reporter.
+    6. **ORIGINALITY RULE (CRITICAL):**
+       - **SIGN-OFF HIERARCHY (TIER 1 > TIER 2):**
+         - **Tier 1 (Tehsil Match):** If text contains [Degana, Merta, Jayal, Didwana, Kuchaman, Makrana, Ladnun, Parbatsar, Nawa, Mundwa, Khinvsar, Riyan Bari], write: "हमारे **[Tehsil]** संवाददाता के अनुसार..."
+         - **Tier 2 (Fallback):** If NO Tehsil found, write: "हमारे **नागौर** संवाददाता के अनुसार..."
+       - **PROHIBITED:** NEVER use Village names (e.g. Chandarun).
+       - **No Rivals:** NEVER mention "Dainik Bhaskar" or "Patrika".
     
     OUTPUT FORMAT:
     Return a JSON object with:

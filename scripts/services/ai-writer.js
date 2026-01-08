@@ -1,7 +1,7 @@
 if (process.env.CI) {
-  require('dotenv').config({ path: '.env' });
+    require('dotenv').config({ path: '.env' });
 } else {
-  require('dotenv').config({ path: '.env.local', override: true });
+    require('dotenv').config({ path: '.env.local', override: true });
 }
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -18,12 +18,40 @@ You are the "Senior Editor-in-Chief" for DailyDhandora, Nagaur's most trusted di
 1. **NEVER** use the words "Dainik Bhaskar", "Bhaskar", "Patrika", "Rajasthan Patrika", "Source", "Credits", or "Agency".
 2. **NEVER** include phrases like "As reported by", "According to", or "Read more at".
 3. **DO NOT** mention any reporter names found in the source text.
-4. **STRICT RULE:** You are the ORIGINAL reporter. Use "DailyDhandora Team", "हमारे नागौर संवाददाता", or "एक्सक्लूसिव रिपोर्ट".
+4. **STRICT RULE:** You are the ORIGINAL reporter.
+
+**SIGN-OFF HIERARCHY (FOLLOW STRICTLY):**
+
+**Tier 1: Tehsil Match (High Priority)**
+Scan the article body for these SPECIFIC keywords. If found, use that location:
+- **Keywords:** [
+    "Degana", "डेगाना",
+    "Merta", "मेड़ता", "Merata",
+    "Jayal", "जायल",
+    "Khinvsar", "खींवसर",
+    "Mundwa", "मूंडवा",
+    "Makrana", "मकराना",
+    "Parbatsar", "परबतसर",
+    "Didwana", "डीडवाना",
+    "Ladnun", "लाडनूं",
+    "Kuchaman", "कुचामन",
+    "Nawa", "नावां",
+    "Riyan Bari", "रियां बड़ी"
+]
+- **Output:** "हमारे **[Tehsil Name]** संवाददाता के अनुसार..."  (e.g., "हमारे **डेगाना** संवाददाता के अनुसार...")
+
+**Tier 2: Default District (Fallback)**
+If NONE of the above keywords are found in the text, you MUST default to:
+- **Output:** "हमारे **नागौर** संवाददाता के अनुसार..."
+
+**FORBIDDEN:**
+- **NEVER** use a Village name (e.g., Chandarun, Lampolai) as the correspondent location.
+- **NEVER** invent a location not in the list or the District name.
 
 **CRITICAL INSTRUCTION: You MUST provide the output strictly in JSON format.**
 
 ### YOUR LOCAL PERSONA:
-- You represent the voice of Nagaur district. Your tone is authoritative, grounded, and professional.
+- You represent the voice of the specific Block/Tehsil involved. Your tone is authoritative, locally grounded, and professional.
 - You use "हम" (We) or "हमारी टीम" (Our team).
 
 ### CATEGORY DEFINITIONS (CHOOSE STRICTLY FROM THIS LIST):
@@ -50,10 +78,10 @@ You are the "Senior Editor-in-Chief" for DailyDhandora, Nagaur's most trusted di
 `;
 
 function cleanJSON(text) {
-  let cleaned = text.replace(/```json\s*/g, '').replace(/```/g, '');
-  const jsonMatch = cleaned.match(/{[\s\S]*}/);
-  if (!jsonMatch) throw new Error('No JSON object found in response');
-  return jsonMatch[0];
+    let cleaned = text.replace(/```json\s*/g, '').replace(/```/g, '');
+    const jsonMatch = cleaned.match(/{[\s\S]*}/);
+    if (!jsonMatch) throw new Error('No JSON object found in response');
+    return jsonMatch[0];
 }
 
 /**
@@ -62,31 +90,31 @@ function cleanJSON(text) {
 async function writeArticle(userPrompt) {
     // 🌍 DYNAMIC TIME CONTEXT (IST)
     const now = new Date();
-    const istDate = now.toLocaleDateString('en-IN', { 
-        timeZone: 'Asia/Kolkata', 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+    const istDate = now.toLocaleDateString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
     });
-    
+
     const timeContext = `\n[SYSTEM TIME CONTEXT: Today is ${istDate}. All content generation must align with this present timeline. Ensure news is treated as current relative to this date.]\n`;
-    
+
     console.log(`\n  🧠 [AI Writer] Received Prompt. Length: ${userPrompt.length} chars. Time Context: ${istDate}`);
 
     async function tryGemini(modelName, label) {
         try {
             console.log(`     🤖 [AI Writer] Attempting with ${label} (${modelName})...`);
             // Prepend time context to System Instruction
-            const model = genAI.getGenerativeModel({ 
-                model: modelName, 
-                systemInstruction: SYSTEM_PROMPT + timeContext 
+            const model = genAI.getGenerativeModel({
+                model: modelName,
+                systemInstruction: SYSTEM_PROMPT + timeContext
             });
             const result = await model.generateContent(userPrompt);
             const text = result.response.text();
             console.log(`     ✅ [AI Writer] ${label} Success. Parsing JSON...`);
             return JSON.parse(cleanJSON(text));
-        } catch (e) { 
+        } catch (e) {
             let msg = e.message || 'Unknown Error';
             if (msg.includes('429') || msg.includes('Quota exceeded')) {
                 msg = 'Rate Limit / Quota Exceeded (429)';
@@ -94,23 +122,23 @@ async function writeArticle(userPrompt) {
                 msg = msg.substring(0, 100) + '...';
             }
             console.log(`     ⚠️ [AI Writer] ${label} Failed: ${msg}`);
-            return null; 
-        } 
-    } 
+            return null;
+        }
+    }
 
     let data = await tryGemini('gemini-2.5-flash', 'Gemini Primary');
-    
+
     if (!data) {
         console.log(`     🔄 [AI Writer] Switching to Lite model...`);
         data = await tryGemini('gemini-2.5-flash-lite', 'Gemini Lite');
     }
-    
+
     if (!data) {
         console.log(`     🔻 [AI Writer] All Gemini models failed. Switching to Groq (Deepseek/Kimi)...`);
         try {
             const completion = await groq.chat.completions.create({
                 messages: [
-                    { role: "system", content: SYSTEM_PROMPT + timeContext }, 
+                    { role: "system", content: SYSTEM_PROMPT + timeContext },
                     { role: "user", content: userPrompt }
                 ],
                 model: "moonshotai/kimi-k2-instruct-0905",
@@ -119,11 +147,11 @@ async function writeArticle(userPrompt) {
             const content = completion.choices[0].message.content;
             console.log(`     ✅ [AI Writer] Groq Success. Parsing JSON...`);
             return JSON.parse(cleanJSON(content));
-        } catch (e) { 
+        } catch (e) {
             const msg = e.message.length > 100 ? e.message.substring(0, 100) + '...' : e.message;
-            console.error(`     ❌ [AI Writer] Groq Failed: ${msg}`); 
-            return null; 
-        } 
+            console.error(`     ❌ [AI Writer] Groq Failed: ${msg}`);
+            return null;
+        }
     }
     return data;
 }
