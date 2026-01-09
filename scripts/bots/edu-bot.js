@@ -72,30 +72,77 @@ async function run() {
         { name: "Rajasthan State", url: "https://www.bhaskar.com/rajasthan" }  // Pay Commission, DA news
     ];
 
-    // 📚 EDUCATION KEYWORDS (Comprehensive)
+    // 🚫 FORBIDDEN KEYWORDS (Blacklist) - REJECT if ANY of these found
+    const forbiddenKeywords = [
+        // Crime/Police - Hard Block
+        'गिरफ्तार', 'गिरफ्तारी', 'arrest', 'arrested', 'हत्या', 'murder', 'killed',
+        'लूट', 'robbery', 'दुष्कर्म', 'rape', 'थाना', 'thana', 'fir दर्ज',
+        'acb', 'aco', 'एसीबी', 'भ्रष्टाचार निरोधक', 'anti corruption', 'रिश्वत', 'bribe',
+        'चोरी', 'theft', 'डकैती', 'dacoity', 'अपहरण', 'kidnap', 'मारपीट', 'assault',
+        'पुलिस ने पकड़ा', 'police nabbed', 'गैंगस्टर', 'gangster', 'माफिया', 'mafia',
+        'सुसाइड', 'suicide', 'आत्महत्या', 'हादसा', 'accident', 'दुर्घटना',
+        'शव', 'body found', 'लाश', 'corpse', 'postmortem', 'पोस्टमार्टम',
+
+        // Irrelevant Departments - Block
+        'नगर निगम', 'nagar nigam', 'नगर पालिका', 'municipality', 'नगरपालिका',
+        'होमगार्ड', 'homeguard', 'home guard', 'होम गार्ड',
+        'बैंक', 'bank fraud', 'बैंक धोखाधड़ी',
+        'पुलिस थाना', 'police station', 'sp office', 'ig office', 'dsp',
+        'जेल', 'jail', 'कारागृह', 'prison', 'न्यायालय', 'court',
+        'वन विभाग', 'forest department', 'पीडब्ल्यूडी', 'pwd',
+        'बिजली विभाग', 'electricity', 'जल विभाग', 'phed',
+
+        // Sports/Entertainment (Not Education)
+        'ipl', 'cricket', 'क्रिकेट', 'football', 'फुटबॉल', 'bollywood', 'बॉलीवुड',
+        'film', 'movie', 'actress', 'actor', 'celebrity'
+    ];
+
+    // 🚫 BLACKLISTED LOCATIONS - Only allow if also has "Shiksha Mantri", "Nideshalaya" etc.
+    const blacklistedLocations = [
+        'alwar', 'अलवर', 'kota', 'कोटा', 'udaipur', 'उदयपुर', 'bharatpur', 'भरतपुर',
+        'sikar', 'सीकर', 'churu', 'चूरू', 'jhunjhunu', 'झुंझुनूं',
+        'sriganganagar', 'श्रीगंगानगर', 'hanumangarh', 'हनुमानगढ़',
+        'banswara', 'बांसवाड़ा', 'dungarpur', 'डूंगरपुर', 'pratapgarh', 'प्रतापगढ़'
+    ];
+
+    // ✅ EDUCATION WHITELIST - Overrides blacklisted location (if news is truly edu-related)
+    const eduWhitelistTerms = [
+        'शिक्षा मंत्री', 'shiksha mantri', 'education minister',
+        'बीकानेर निदेशालय', 'bikaner nideshalaya', 'nideshalaya',
+        'जयपुर सचिवालय', 'jaipur sachivalaya', 'sachivalaya',
+        'राज्य स्तरीय शिक्षा', 'state level education'
+    ];
+
+    // 📚 EDUCATION KEYWORDS (Comprehensive) - Cleaned up, no more police/crime triggers
     const eduKeywords = [
-        // शाला दर्पण & Education Dept
+        // शाला दर्पण & Education Dept (CORE)
         'shala darpan', 'शाला दर्पण', 'shiksha', 'शिक्षा', 'school', 'स्कूल',
         'teacher', 'शिक्षक', 'bikaner nideshalaya', 'बीकानेर निदेशालय', 'doep', 'शिक्षा विभाग',
+        'vidyalaya', 'विद्यालय', 'madrsa', 'मदरसा', 'aanganwadi', 'आंगनवाड़ी',
+        'headmaster', 'प्रधानाध्यापक', 'principal', 'प्रिंसिपल',
+        '3rd grade', 'थर्ड ग्रेड', '2nd grade', 'सेकंड ग्रेड', 'grade teacher',
 
         // Exams & Results
-        'rpsc', 'rsmssb', 'reet', 'रीट', 'exam', 'परीक्षा', 'result', 'परिणाम',
+        'rpsc', 'rsmssb', 'reet', 'रीट', 'परीक्षा', 'result', 'परिणाम',
         'admit card', 'प्रवेश पत्र', 'answer key', 'उत्तर कुंजी',
         'cut off', 'कट ऑफ', 'merit list', 'मेरिट लिस्ट',
+        'board exam', 'बोर्ड परीक्षा', 'rbse', 'cbse',
+        'scholarship', 'छात्रवृत्ति', 'स्कॉलरशिप',
 
-        // Recruitment & Jobs (भर्ती)
-        'bharti', 'भर्ती', 'vacancy', 'रिक्ति', 'recruitment', 'नौकरी',
-        'patwari', 'पटवारी', 'gram sevak', 'ग्राम सेवक', 'ldc', 'clerk', 'लिपिक',
-        'constable', 'सिपाही', 'police', 'पुलिस', 'army', 'सेना', 'railway', 'रेलवे',
+        // Recruitment & Jobs (ONLY Education Related)
+        'shikshak bharti', 'शिक्षक भर्ती', 'teacher recruitment',
+        'patwari', 'पटवारी', 'gram sevak', 'ग्राम सेवक', 'ldc bharti',
+        'government job', 'सरकारी नौकरी', 'vacancy', 'रिक्ति',
 
-        // 💰 Pay Commission & Salary (NEW!)
+        // 💰 Pay Commission & Salary
         'pay commission', 'पे कमीशन', 'वेतन आयोग', '8th pay', '8वां वेतन',
-        'da', 'महंगाई भत्ता', 'dearness allowance', 'hra', 'मकान भत्ता',
-        'salary', 'सैलरी', 'वेतन', 'pension', 'पेंशन', 'increment', 'वेतन वृद्धि',
-        'fitment factor', 'फिटमेंट फैक्टर', 'arrear', 'एरियर', 'बकाया',
+        'महंगाई भत्ता', 'dearness allowance', 'da hike', 'hra',
+        'salary hike', 'सैलरी', 'वेतन वृद्धि', 'pension', 'पेंशन',
+        'fitment factor', 'फिटमेंट फैक्टर', 'arrear', 'एरियर',
 
-        // Government Employee Related
-        'sarkari', 'सरकारी', 'employee', 'कर्मचारी', 'staff', 'स्टाफ'
+        // Government Employee Related (Must be with other edu context)
+        'sarkari karmchari', 'सरकारी कर्मचारी', 'employee union',
+        'transfer list', 'स्थानांतरण', 'posting order'
     ];
 
     const rajasthanKeywords = [
@@ -157,6 +204,27 @@ async function run() {
 
                     // Double check content (Include URL in check for location safety)
                     const contentCheck = (article.headline + " " + article.body + " " + link).toLowerCase();
+
+                    // 🚫 STEP 1: FORBIDDEN KEYWORDS CHECK (Instant Reject)
+                    const hasForbiddenKeyword = forbiddenKeywords.some(k => contentCheck.includes(k));
+                    if (hasForbiddenKeyword) {
+                        const matched = forbiddenKeywords.find(k => contentCheck.includes(k));
+                        console.log(`     🚫 [Edu Bot] BLACKLIST REJECT: Found "${matched}" - Skipping crime/irrelevant news.`);
+                        continue;
+                    }
+
+                    // 🚫 STEP 2: BLACKLISTED LOCATION CHECK (Allow only if edu whitelist term present)
+                    const hasBlacklistedLocation = blacklistedLocations.some(loc => contentCheck.includes(loc));
+                    if (hasBlacklistedLocation) {
+                        const hasEduWhitelist = eduWhitelistTerms.some(term => contentCheck.includes(term));
+                        if (!hasEduWhitelist) {
+                            const matchedLoc = blacklistedLocations.find(loc => contentCheck.includes(loc));
+                            console.log(`     🚫 [Edu Bot] LOCATION REJECT: "${matchedLoc}" found without Shiksha Mantri/Nideshalaya context.`);
+                            continue;
+                        }
+                    }
+
+                    // ✅ STEP 3: RAJASTHAN FOCUS CHECK
                     const isRajasthan = rajasthanKeywords.some(k => contentCheck.includes(k));
 
                     if (isRajasthan) {
