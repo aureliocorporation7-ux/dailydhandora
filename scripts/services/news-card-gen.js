@@ -4,21 +4,71 @@ const fs = require('fs');
 const path = require('path');
 
 const FONT_URL = "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf";
-const FONT_PATH = path.join(process.cwd(), 'public', 'NotoSansDevanagari-Bold.ttf');
-const LOGO_PATH = path.join(process.cwd(), 'public', 'logo.png');
+const FONT_FILENAME = 'NotoSansDevanagari-Bold.ttf';
+const LOGO_FILENAME = 'logo.png';
+
+// 🔍 Multiple paths to check (Render standalone build changes cwd)
+const POSSIBLE_PATHS = [
+    __dirname,                                              // Same folder as this file (MOST RELIABLE)
+    path.join(process.cwd(), 'public'),                    // Local dev
+    path.join(__dirname, '../../public'),                   // Relative to this file
+    path.join(process.cwd(), '.next/standalone/public'),   // Standalone build
+    '/app/public',                                          // Render absolute path
+    '/app/.next/standalone/public',                         // Render standalone
+    '/app/scripts/services'                                 // Render scripts folder
+];
+
+// Find the correct paths
+function findPath(filename) {
+    for (const basePath of POSSIBLE_PATHS) {
+        const fullPath = path.join(basePath, filename);
+        if (fs.existsSync(fullPath)) {
+            console.log(`  ✅ [Card Gen] Found ${filename} at: ${fullPath}`);
+            return fullPath;
+        }
+    }
+    // Default fallback to cwd
+    return path.join(process.cwd(), 'public', filename);
+}
+
+let FONT_PATH = null;
+let LOGO_PATH = null;
 
 /**
  * 📥 Ensures the Hindi font exists locally.
  */
 async function ensureFont() {
-    if (fs.existsSync(FONT_PATH)) return;
-    console.log("  📥 [Card Gen] Downloading Hindi Font...");
+    // Find font path if not set
+    if (!FONT_PATH) {
+        FONT_PATH = findPath(FONT_FILENAME);
+    }
+    if (!LOGO_PATH) {
+        LOGO_PATH = findPath(LOGO_FILENAME);
+    }
+
+    if (fs.existsSync(FONT_PATH)) {
+        console.log(`  ✅ [Card Gen] Font exists at: ${FONT_PATH}`);
+        return;
+    }
+
+    console.log("  📥 [Card Gen] Font not found locally, downloading...");
+    console.log(`  📂 [Card Gen] Will save to: ${FONT_PATH}`);
+
     try {
+        // Ensure directory exists
+        const fontDir = path.dirname(FONT_PATH);
+        if (!fs.existsSync(fontDir)) {
+            fs.mkdirSync(fontDir, { recursive: true });
+        }
+
         const response = await axios({ url: FONT_URL, responseType: 'stream' });
         const writer = fs.createWriteStream(FONT_PATH);
         response.data.pipe(writer);
         return new Promise((resolve, reject) => {
-            writer.on('finish', resolve);
+            writer.on('finish', () => {
+                console.log("  ✅ [Card Gen] Font downloaded successfully!");
+                resolve();
+            });
             writer.on('error', reject);
         });
     } catch (e) {
@@ -30,9 +80,16 @@ async function ensureFont() {
  * 🔄 Helper: Get Font as Base64 for reliable embedding
  */
 function getFontBase64() {
-    if (fs.existsSync(FONT_PATH)) {
+    // Ensure path is found
+    if (!FONT_PATH) {
+        FONT_PATH = findPath(FONT_FILENAME);
+    }
+
+    if (FONT_PATH && fs.existsSync(FONT_PATH)) {
+        console.log(`  📖 [Card Gen] Reading font from: ${FONT_PATH}`);
         return fs.readFileSync(FONT_PATH).toString('base64');
     }
+    console.warn("  ⚠️ [Card Gen] Font file not found, Hindi text may show boxes!");
     return '';
 }
 
@@ -70,11 +127,11 @@ async function generateNewsCard(imageUrl, headline) {
 
         // 1. Download Background Image
         const inputImageBuffer = (await axios({ url: imageUrl, responseType: 'arraybuffer' })).data;
-        
+
         // 2. Prepare Dimensions
         const width = 1200;
         const height = 675;
-        
+
         // 3. Load Logo (if exists)
         let logoBuffer = null;
         if (fs.existsSync(LOGO_PATH)) {
@@ -86,7 +143,7 @@ async function generateNewsCard(imageUrl, headline) {
         const lineHeight = 60;
         const textBlockHeight = lines.length * lineHeight;
         const textStartY = height - 60 - textBlockHeight; // Position from bottom with padding
-        
+
         const textSvg = `
         <svg width="${width}" height="${height}">
             <defs>
@@ -118,9 +175,9 @@ async function generateNewsCard(imageUrl, headline) {
             <text x="150" y="${textStartY - 43}" font-family="sans-serif" font-size="20" fill="white" text-anchor="middle" font-weight="bold">DAILY DHANDORA</text>
 
             <!-- Text Lines -->
-            ${lines.map((line, i) => 
-                `<text x="40" y="${textStartY + (i * lineHeight)}" class="title">${line}</text>`
-            ).join('')}
+            ${lines.map((line, i) =>
+            `<text x="40" y="${textStartY + (i * lineHeight)}" class="title">${line}</text>`
+        ).join('')}
         </svg>
         `;
 
@@ -180,7 +237,7 @@ async function generateMandiCard(rates, date) {
             
             <!-- Header -->
             <rect x="0" y="0" width="${width}" height="100" fill="#facc15" />
-            <text x="${width/2}" y="70" class="header-text" font-size="48" fill="#000" text-anchor="middle">
+            <text x="${width / 2}" y="70" class="header-text" font-size="48" fill="#000" text-anchor="middle">
                 मंडी भाव अपडेट - ${date}
             </text>
 
@@ -195,13 +252,13 @@ async function generateMandiCard(rates, date) {
         // Generate Rows
         let rowY = 220;
         let rowsSvg = "";
-        
+
         const topRates = rates.slice(0, 6);
 
         topRates.forEach((item, i) => {
             const isEven = i % 2 === 0;
             const bg = isEven ? 'fill="rgba(255,255,255,0.1)"' : 'fill="rgba(255,255,255,0.05)"';
-            
+
             rowsSvg += `
                 <rect x="100" y="${rowY - 35}" width="1000" height="60" rx="5" ${bg} />
                 <text x="150" y="${rowY + 10}" class="row-text" font-size="36" fill="#fff">${item.crop}</text>
@@ -212,7 +269,7 @@ async function generateMandiCard(rates, date) {
         });
 
         const footerSvg = `
-             <text x="${width/2}" y="${height - 30}" font-family="sans-serif" font-size="24" fill="#cbd5e1" text-anchor="middle">
+             <text x="${width / 2}" y="${height - 30}" font-family="sans-serif" font-size="24" fill="#cbd5e1" text-anchor="middle">
                 DailyDhandora.com - किसानों का साथी
              </text>
         `;
@@ -224,13 +281,13 @@ async function generateMandiCard(rates, date) {
         if (fs.existsSync(LOGO_PATH)) {
             logoBuffer = await sharp(LOGO_PATH).resize(120).toBuffer();
         }
-        
+
         const compositeOps = [
-             { input: Buffer.from(finalSvg), top: 0, left: 0 }
+            { input: Buffer.from(finalSvg), top: 0, left: 0 }
         ];
 
         if (logoBuffer) {
-             compositeOps.push({ input: logoBuffer, top: 10, left: 20 });
+            compositeOps.push({ input: logoBuffer, top: 10, left: 20 });
         }
 
         return await sharp({
@@ -241,9 +298,9 @@ async function generateMandiCard(rates, date) {
                 background: { r: 0, g: 0, b: 0, alpha: 0 }
             }
         })
-        .composite(compositeOps)
-        .png()
-        .toBuffer();
+            .composite(compositeOps)
+            .png()
+            .toBuffer();
 
     } catch (e) {
         console.error("❌ [Mandi Card] Error:", e);
@@ -286,7 +343,7 @@ async function generateEduCard(headline, date) {
             
             <!-- Header -->
             <rect x="0" y="0" width="${width}" height="100" fill="#facc15" /> <!-- Yellow -->
-            <text x="${width/2}" y="70" class="header-text" font-size="48" fill="#000" text-anchor="middle">
+            <text x="${width / 2}" y="70" class="header-text" font-size="48" fill="#000" text-anchor="middle">
                 राजस्थान शिक्षा विभाग अपडेट
             </text>
 
@@ -305,15 +362,15 @@ async function generateEduCard(headline, date) {
                 let textSvg = '';
                 let startY = 280;
                 if (lines.length > 3) startY = 250; // Adjust if long
-                
+
                 lines.forEach((line, i) => {
-                    textSvg += `<text x="${width/2}" y="${startY + (i * 70)}" class="main-text" font-size="52" fill="#fff" text-anchor="middle">${line}</text>`;
+                    textSvg += `<text x="${width / 2}" y="${startY + (i * 70)}" class="main-text" font-size="52" fill="#fff" text-anchor="middle">${line}</text>`;
                 });
                 return textSvg;
             })()}
 
             <!-- Footer -->
-             <text x="${width/2}" y="${height - 30}" font-family="sans-serif" font-size="24" fill="#cbd5e1" text-anchor="middle">
+             <text x="${width / 2}" y="${height - 30}" font-family="sans-serif" font-size="24" fill="#cbd5e1" text-anchor="middle">
                 DailyDhandora.com - Education Portal
              </text>
         </svg>
@@ -324,13 +381,13 @@ async function generateEduCard(headline, date) {
         if (fs.existsSync(LOGO_PATH)) {
             logoBuffer = await sharp(LOGO_PATH).resize(120).toBuffer();
         }
-        
+
         const compositeOps = [
-             { input: Buffer.from(bgSvg), top: 0, left: 0 }
+            { input: Buffer.from(bgSvg), top: 0, left: 0 }
         ];
 
         if (logoBuffer) {
-             compositeOps.push({ input: logoBuffer, top: 10, left: 20 });
+            compositeOps.push({ input: logoBuffer, top: 10, left: 20 });
         }
 
         return await sharp({
@@ -341,9 +398,9 @@ async function generateEduCard(headline, date) {
                 background: { r: 0, g: 0, b: 0, alpha: 0 }
             }
         })
-        .composite(compositeOps)
-        .png()
-        .toBuffer();
+            .composite(compositeOps)
+            .png()
+            .toBuffer();
 
     } catch (e) {
         console.error("❌ [Edu Card] Error:", e);
