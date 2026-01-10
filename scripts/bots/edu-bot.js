@@ -296,24 +296,37 @@ async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
         return false;
     }
 
-    // 2. GENERATE EDU CARD
-    let shareCardUrl = null;
-    let imageUrl = null;
+    // 🔄 SMART IMAGE FALLBACK SYSTEM
+    // For Education: Skip AI Gen, prioritize Card (WhatsApp essential)
+    const imageResult = await imageGen.getImageWithFallback(
+        'शिक्षा विभाग',
+        aiData.headline,
+        null,  // No AI image for edu - cards are preferred
+        { enableImageGen: false, enableAI: false } // Force stock/card flow
+    );
 
-    console.log(`     🎨 [Edu Bot] Generating Edu Card...`);
-    try {
-        const cardBuffer = await newsCardGen.generateEduCard(aiData.headline, aiData.date || todayYMD);
-        if (cardBuffer) {
-            shareCardUrl = await imageGen.uploadToImgBB(cardBuffer);
-            imageUrl = shareCardUrl;
+    const imageUrl = imageResult.url;
+    const imageType = imageResult.type;
+    const shareCardUrl = imageResult.type === 'card' ? imageUrl : null;
+
+    // If not already a card, try to generate one for WhatsApp
+    let finalShareCardUrl = shareCardUrl;
+    if (!shareCardUrl) {
+        try {
+            console.log(`     🎨 [Edu Bot] Generating Edu Card (WhatsApp MUST)...`);
+            const cardBuffer = await newsCardGen.generateEduCard(aiData.headline, aiData.date || todayYMD);
+            if (cardBuffer) {
+                finalShareCardUrl = await imageGen.uploadToImgBB(cardBuffer);
+                if (finalShareCardUrl) {
+                    console.log("     ✅ [Edu Bot] Edu Card Created & Uploaded!");
+                }
+            }
+        } catch (e) {
+            console.error(`     ⚠️ [Edu Bot] Card Gen Failed: ${e.message}`);
         }
-    } catch (e) {
-        console.error(`     ⚠️ [Edu Bot] Card Gen Failed: ${e.message}`);
-    }
-
-    // Fallback Image
-    if (!imageUrl) {
-        imageUrl = getCategoryFallback('सरकारी योजना'); // Closest fallback
+    } else {
+        finalShareCardUrl = shareCardUrl;
+        console.log("     ℹ️ [Edu Bot] Card already generated via fallback system");
     }
 
     // 3. SAVE
@@ -323,8 +336,9 @@ async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
         tags: [...(aiData.tags || []), 'Education', 'Shiksha Vibhag'],
         category: 'शिक्षा विभाग',
         sourceUrl: sourceUrl,
-        imageUrl: imageUrl,
-        shareCardUrl: shareCardUrl || imageUrl,
+        imageUrl: finalShareCardUrl || imageUrl, // Prefer card as main image
+        imageType: finalShareCardUrl ? 'card' : imageType, // NEW: Store image type
+        shareCardUrl: finalShareCardUrl || imageUrl,
         status: settings.articleStatus,
         author: 'EduBot (Rajasthan)'
     };

@@ -392,26 +392,35 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
     const cleanHeadline = sanitizeContent(aiData.headline);
     const cleanContent = sanitizeContent(aiData.content);
 
-    let imageUrl = null;
-    if (settings.enableImageGen && settings.enableAI && aiData.image_prompt) {
-        imageUrl = await imageGen.generateImage(aiData.image_prompt);
-    }
-
-    if (!imageUrl) {
-        imageUrl = getCategoryFallback('नागौर न्यूज़');
-    }
+    // 🔄 SMART IMAGE FALLBACK SYSTEM
+    // Priority: AI Generated → Stock Image → Card (for WhatsApp essentials)
+    const imageResult = await imageGen.getImageWithFallback(
+        'नागौर न्यूज़',
+        cleanHeadline,
+        aiData.image_prompt,
+        settings
+    );
+    const imageUrl = imageResult.url;
+    const imageType = imageResult.type; // 'ai_generated' | 'stock' | 'card' | 'fallback'
 
     // 🎴 GENERATE WHATSAPP SHARE CARD (Viral Feature)
+    // Only generate separate card if image is clean (not already a card)
     let shareCardUrl = null;
-    try {
-        console.log("     🎨 [News Bot] Generating Viral News Card...");
-        const cardBuffer = await newsCardGen.generateNewsCard(imageUrl, cleanHeadline);
-        if (cardBuffer) {
-            shareCardUrl = await imageGen.uploadToImgBB(cardBuffer);
-            if (shareCardUrl) console.log("     ✅ [News Bot] News Card Created & Uploaded!");
+    if (imageType !== 'card') {
+        try {
+            console.log("     🎨 [News Bot] Generating Viral News Card...");
+            const cardBuffer = await newsCardGen.generateNewsCard(imageUrl, cleanHeadline);
+            if (cardBuffer) {
+                shareCardUrl = await imageGen.uploadToImgBB(cardBuffer);
+                if (shareCardUrl) console.log("     ✅ [News Bot] News Card Created & Uploaded!");
+            }
+        } catch (e) {
+            console.error(`     ⚠️ [News Bot] Card Gen Failed: ${e.message}`);
         }
-    } catch (e) {
-        console.error(`     ⚠️ [News Bot] Card Gen Failed: ${e.message}`);
+    } else {
+        // If image IS a card, use it as shareCard too
+        shareCardUrl = imageUrl;
+        console.log("     ℹ️ [News Bot] Image is already a card, using as shareCardUrl");
     }
 
     const articleData = {
@@ -421,9 +430,10 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/^\* (.*$)/gim, '<li>$1</li>'),
         tags: [...(aiData.tags || []), 'Nagaur', 'Rajasthan News'],
-        category: 'नागौर न्यूज़',
+        category: 'नागौर न्यूज़',
         sourceUrl: sourceUrl,
         imageUrl: imageUrl,
+        imageType: imageType, // NEW: Store image type for UI logic
         shareCardUrl: shareCardUrl || imageUrl, // Fallback to normal image if card fails
         status: settings.articleStatus,
         author: `NewsBot (${sourceName})`

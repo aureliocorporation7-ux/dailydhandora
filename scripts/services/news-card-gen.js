@@ -1,10 +1,13 @@
+const satori = require('satori').default;
+const { Resvg } = require('@resvg/resvg-js');
 const sharp = require('sharp');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
-const FONT_URL = "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf";
-const FONT_FILENAME = 'NotoSansDevanagari-Bold.ttf';
+const DEVANAGARI_FONT_URL = "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf";
+const DEVANAGARI_FONT_FILENAME = 'NotoSansDevanagari-Bold.ttf';
+const LATIN_FONT_FILENAME = 'NotoSans-Bold.ttf';
 const LOGO_FILENAME = 'logo.png';
 
 // 🔍 Multiple paths to check (Render standalone build changes cwd)
@@ -31,66 +34,93 @@ function findPath(filename) {
     return path.join(process.cwd(), 'public', filename);
 }
 
-let FONT_PATH = null;
+let DEVANAGARI_FONT_PATH = null;
+let LATIN_FONT_PATH = null;
 let LOGO_PATH = null;
+let DEVANAGARI_FONT_BUFFER = null; // Cache Devanagari font buffer for Satori
+let LATIN_FONT_BUFFER = null;       // Cache Latin font buffer for Satori
 
 /**
- * 📥 Ensures the Hindi font exists locally.
+ * 📥 Ensures both Hindi and Latin fonts exist locally and loads them into memory.
  */
 async function ensureFont() {
-    // Find font path if not set
-    if (!FONT_PATH) {
-        FONT_PATH = findPath(FONT_FILENAME);
+    // Find font paths if not set
+    if (!DEVANAGARI_FONT_PATH) {
+        DEVANAGARI_FONT_PATH = findPath(DEVANAGARI_FONT_FILENAME);
+    }
+    if (!LATIN_FONT_PATH) {
+        LATIN_FONT_PATH = findPath(LATIN_FONT_FILENAME);
     }
     if (!LOGO_PATH) {
         LOGO_PATH = findPath(LOGO_FILENAME);
     }
 
-    if (fs.existsSync(FONT_PATH)) {
-        console.log(`  ✅ [Card Gen] Font exists at: ${FONT_PATH}`);
-        return;
+    // Load Devanagari font
+    if (fs.existsSync(DEVANAGARI_FONT_PATH)) {
+        console.log(`  ✅ [Card Gen] Devanagari font exists at: ${DEVANAGARI_FONT_PATH}`);
+        if (!DEVANAGARI_FONT_BUFFER) {
+            DEVANAGARI_FONT_BUFFER = fs.readFileSync(DEVANAGARI_FONT_PATH);
+            console.log(`  ✅ [Card Gen] Devanagari font loaded (${DEVANAGARI_FONT_BUFFER.length} bytes)`);
+        }
+    } else {
+        console.log("  📥 [Card Gen] Devanagari font not found, downloading...");
+        try {
+            const fontDir = path.dirname(DEVANAGARI_FONT_PATH);
+            if (!fs.existsSync(fontDir)) {
+                fs.mkdirSync(fontDir, { recursive: true });
+            }
+            const response = await axios({ url: DEVANAGARI_FONT_URL, responseType: 'arraybuffer' });
+            fs.writeFileSync(DEVANAGARI_FONT_PATH, Buffer.from(response.data));
+            DEVANAGARI_FONT_BUFFER = fs.readFileSync(DEVANAGARI_FONT_PATH);
+            console.log("  ✅ [Card Gen] Devanagari font downloaded!");
+        } catch (e) {
+            console.error("  ❌ [Card Gen] Failed to download Devanagari font:", e.message);
+        }
     }
 
-    console.log("  📥 [Card Gen] Font not found locally, downloading...");
-    console.log(`  📂 [Card Gen] Will save to: ${FONT_PATH}`);
-
-    try {
-        // Ensure directory exists
-        const fontDir = path.dirname(FONT_PATH);
-        if (!fs.existsSync(fontDir)) {
-            fs.mkdirSync(fontDir, { recursive: true });
+    // Load Latin font
+    if (fs.existsSync(LATIN_FONT_PATH)) {
+        console.log(`  ✅ [Card Gen] Latin font exists at: ${LATIN_FONT_PATH}`);
+        if (!LATIN_FONT_BUFFER) {
+            LATIN_FONT_BUFFER = fs.readFileSync(LATIN_FONT_PATH);
+            console.log(`  ✅ [Card Gen] Latin font loaded (${LATIN_FONT_BUFFER.length} bytes)`);
         }
-
-        const response = await axios({ url: FONT_URL, responseType: 'stream' });
-        const writer = fs.createWriteStream(FONT_PATH);
-        response.data.pipe(writer);
-        return new Promise((resolve, reject) => {
-            writer.on('finish', () => {
-                console.log("  ✅ [Card Gen] Font downloaded successfully!");
-                resolve();
-            });
-            writer.on('error', reject);
-        });
-    } catch (e) {
-        console.error("  ❌ [Card Gen] Failed to download font:", e.message);
+    } else {
+        console.warn("  ⚠️ [Card Gen] Latin font not found, English text may show boxes!");
     }
 }
 
 /**
- * 🔄 Helper: Get Font as Base64 for reliable embedding
+ * 🔄 Get Satori fonts configuration (both Devanagari and Latin)
  */
-function getFontBase64() {
-    // Ensure path is found
-    if (!FONT_PATH) {
-        FONT_PATH = findPath(FONT_FILENAME);
+function getSatoriFonts() {
+    const fonts = [];
+
+    // Add Latin font FIRST (fallback for English characters)
+    if (LATIN_FONT_BUFFER) {
+        fonts.push({
+            name: 'Noto Sans',
+            data: LATIN_FONT_BUFFER,
+            weight: 700,
+            style: 'normal'
+        });
     }
 
-    if (FONT_PATH && fs.existsSync(FONT_PATH)) {
-        console.log(`  📖 [Card Gen] Reading font from: ${FONT_PATH}`);
-        return fs.readFileSync(FONT_PATH).toString('base64');
+    // Add Devanagari font (primary for Hindi)
+    if (DEVANAGARI_FONT_BUFFER) {
+        fonts.push({
+            name: 'Noto Sans Devanagari',
+            data: DEVANAGARI_FONT_BUFFER,
+            weight: 700,
+            style: 'normal'
+        });
     }
-    console.warn("  ⚠️ [Card Gen] Font file not found, Hindi text may show boxes!");
-    return '';
+
+    if (fonts.length === 0) {
+        console.warn("  ⚠️ [Card Gen] No font buffers loaded!");
+    }
+
+    return fonts;
 }
 
 /**
@@ -115,6 +145,19 @@ function wrapText(text, maxCharsPerLine = 35) {
 }
 
 /**
+ * 🖼️ Convert SVG string to PNG buffer using resvg-js
+ */
+function svgToPng(svgString, width = 1200) {
+    const resvg = new Resvg(svgString, {
+        fitTo: {
+            mode: 'width',
+            value: width
+        }
+    });
+    return resvg.render().asPng();
+}
+
+/**
  * 🎴 Generates a "Breaking News" card.
  * @param {string} imageUrl - The background image URL.
  * @param {string} headline - The Hindi headline.
@@ -123,7 +166,7 @@ function wrapText(text, maxCharsPerLine = 35) {
 async function generateNewsCard(imageUrl, headline) {
     try {
         await ensureFont();
-        const fontBase64 = getFontBase64();
+        const fonts = getSatoriFonts();
 
         // 1. Download Background Image
         const inputImageBuffer = (await axios({ url: imageUrl, responseType: 'arraybuffer' })).data;
@@ -132,58 +175,74 @@ async function generateNewsCard(imageUrl, headline) {
         const width = 1200;
         const height = 675;
 
-        // 3. Load Logo (if exists)
+        // 3. Wrap headline into lines
+        const lines = wrapText(headline, 40);
+
+        // 4. Create overlay SVG using Satori
+        const overlaySvg = await satori(
+            {
+                type: 'div',
+                props: {
+                    style: {
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'flex-end',
+                        padding: '40px',
+                        background: 'linear-gradient(to bottom, transparent 0%, transparent 40%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0.95) 100%)'
+                    },
+                    children: [
+                        // Branding Tag
+                        {
+                            type: 'div',
+                            props: {
+                                style: {
+                                    backgroundColor: '#DC2626',
+                                    color: 'white',
+                                    padding: '8px 20px',
+                                    borderRadius: '5px',
+                                    fontSize: '20px',
+                                    fontWeight: 'bold',
+                                    marginBottom: '20px',
+                                    alignSelf: 'flex-start'
+                                },
+                                children: 'DAILY DHANDORA'
+                            }
+                        },
+                        // Headline Lines
+                        ...lines.map(line => ({
+                            type: 'div',
+                            props: {
+                                style: {
+                                    color: 'white',
+                                    fontSize: '48px',
+                                    fontWeight: 'bold',
+                                    fontFamily: 'Noto Sans Devanagari',
+                                    textShadow: '2px 2px 4px rgba(0,0,0,0.9)',
+                                    lineHeight: 1.3
+                                },
+                                children: line
+                            }
+                        }))
+                    ]
+                }
+            },
+            { width, height, fonts }
+        );
+
+        // 5. Convert SVG overlay to PNG
+        const overlayPngBuffer = svgToPng(overlaySvg, width);
+
+        // 6. Load Logo (if exists)
         let logoBuffer = null;
         if (fs.existsSync(LOGO_PATH)) {
             logoBuffer = await sharp(LOGO_PATH).resize(150).toBuffer();
         }
 
-        // 4. Create SVG Overlay (Gradient + Text)
-        const lines = wrapText(headline, 40); // Wrap at ~40 chars
-        const lineHeight = 60;
-        const textBlockHeight = lines.length * lineHeight;
-        const textStartY = height - 60 - textBlockHeight; // Position from bottom with padding
-
-        const textSvg = `
-        <svg width="${width}" height="${height}">
-            <defs>
-                <style>
-                    @font-face {
-                        font-family: 'Noto Sans Devanagari';
-                        src: url(data:font/ttf;base64,${fontBase64});
-                    }
-                    .title { 
-                        fill: white; 
-                        font-family: 'Noto Sans Devanagari', sans-serif; 
-                        font-size: 48px; 
-                        font-weight: bold;
-                        text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
-                    }
-                </style>
-                <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style="stop-color:rgb(0,0,0);stop-opacity:0" />
-                    <stop offset="40%" style="stop-color:rgb(0,0,0);stop-opacity:0.6" />
-                    <stop offset="100%" style="stop-color:rgb(0,0,0);stop-opacity:0.95" />
-                </linearGradient>
-            </defs>
-            
-            <!-- Gradient Overlay (Bottom Half for readability) -->
-            <rect x="0" y="${height * 0.4}" width="${width}" height="${height * 0.6}" fill="url(#grad)" />
-            
-            <!-- Branding Tag -->
-            <rect x="40" y="${textStartY - 70}" width="220" height="40" rx="5" fill="#DC2626" />
-            <text x="150" y="${textStartY - 43}" font-family="sans-serif" font-size="20" fill="white" text-anchor="middle" font-weight="bold">DAILY DHANDORA</text>
-
-            <!-- Text Lines -->
-            ${lines.map((line, i) =>
-            `<text x="40" y="${textStartY + (i * lineHeight)}" class="title">${line}</text>`
-        ).join('')}
-        </svg>
-        `;
-
-        // 5. Composite
+        // 7. Composite everything using Sharp
         const compositeOps = [
-            { input: Buffer.from(textSvg), top: 0, left: 0 }
+            { input: Buffer.from(overlayPngBuffer), top: 0, left: 0 }
         ];
 
         if (logoBuffer) {
@@ -211,70 +270,117 @@ async function generateNewsCard(imageUrl, headline) {
 async function generateMandiCard(rates, date) {
     try {
         await ensureFont();
-        const fontBase64 = getFontBase64();
+        const fonts = getSatoriFonts();
 
         const width = 1200;
         const height = 675;
-
-        // SVG Construction
-        const bgSvg = `
-        <svg width="${width}" height="${height}">
-            <defs>
-                <style>
-                    @font-face {
-                        font-family: 'Noto Sans Devanagari';
-                        src: url(data:font/ttf;base64,${fontBase64});
-                    }
-                    .header-text { font-family: 'Noto Sans Devanagari', sans-serif; font-weight: bold; }
-                    .row-text { font-family: 'Noto Sans Devanagari', sans-serif; font-weight: bold; }
-                </style>
-                <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style="stop-color:#14532d;stop-opacity:1" /> <!-- Dark Green -->
-                    <stop offset="100%" style="stop-color:#166534;stop-opacity:1" /> <!-- Green -->
-                </linearGradient>
-            </defs>
-            <rect width="${width}" height="${height}" fill="url(#bgGrad)" />
-            
-            <!-- Header -->
-            <rect x="0" y="0" width="${width}" height="100" fill="#facc15" />
-            <text x="${width / 2}" y="70" class="header-text" font-size="48" fill="#000" text-anchor="middle">
-                मंडी भाव अपडेट - ${date}
-            </text>
-
-            <!-- Columns Header -->
-            <rect x="100" y="130" width="1000" height="50" rx="10" fill="rgba(255,255,255,0.2)" />
-            <text x="150" y="165" class="header-text" font-size="32" fill="#fff">फसल</text>
-            <text x="600" y="165" class="header-text" font-size="32" fill="#fff" text-anchor="middle">न्यूनतम</text>
-            <text x="1050" y="165" class="header-text" font-size="32" fill="#fff" text-anchor="end">अधिकतम</text>
-        </svg>
-        `;
-
-        // Generate Rows
-        let rowY = 220;
-        let rowsSvg = "";
-
         const topRates = rates.slice(0, 6);
 
-        topRates.forEach((item, i) => {
-            const isEven = i % 2 === 0;
-            const bg = isEven ? 'fill="rgba(255,255,255,0.1)"' : 'fill="rgba(255,255,255,0.05)"';
+        // Create Mandi Card using Satori
+        const svg = await satori(
+            {
+                type: 'div',
+                props: {
+                    style: {
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        background: 'linear-gradient(to bottom, #14532d, #166534)',
+                        fontFamily: 'Noto Sans Devanagari'
+                    },
+                    children: [
+                        // Header
+                        {
+                            type: 'div',
+                            props: {
+                                style: {
+                                    backgroundColor: '#facc15',
+                                    padding: '20px',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
+                                },
+                                children: {
+                                    type: 'span',
+                                    props: {
+                                        style: {
+                                            fontSize: '48px',
+                                            fontWeight: 'bold',
+                                            color: '#000'
+                                        },
+                                        children: `मंडी भाव अपडेट - ${date}`
+                                    }
+                                }
+                            }
+                        },
+                        // Column Headers
+                        {
+                            type: 'div',
+                            props: {
+                                style: {
+                                    display: 'flex',
+                                    padding: '15px 100px',
+                                    marginTop: '20px',
+                                    backgroundColor: 'rgba(255,255,255,0.2)',
+                                    marginLeft: '100px',
+                                    marginRight: '100px',
+                                    borderRadius: '10px'
+                                },
+                                children: [
+                                    { type: 'span', props: { style: { flex: 1, fontSize: '32px', fontWeight: 'bold', color: 'white' }, children: 'फसल' } },
+                                    { type: 'span', props: { style: { width: '200px', fontSize: '32px', fontWeight: 'bold', color: 'white', textAlign: 'center' }, children: 'न्यूनतम' } },
+                                    { type: 'span', props: { style: { width: '200px', fontSize: '32px', fontWeight: 'bold', color: 'white', textAlign: 'right' }, children: 'अधिकतम' } }
+                                ]
+                            }
+                        },
+                        // Rate Rows
+                        ...topRates.map((item, i) => ({
+                            type: 'div',
+                            props: {
+                                style: {
+                                    display: 'flex',
+                                    padding: '15px 100px',
+                                    marginLeft: '100px',
+                                    marginRight: '100px',
+                                    marginTop: '10px',
+                                    backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+                                    borderRadius: '5px'
+                                },
+                                children: [
+                                    { type: 'span', props: { style: { flex: 1, fontSize: '36px', fontWeight: 'bold', color: 'white' }, children: item.crop } },
+                                    { type: 'span', props: { style: { width: '200px', fontSize: '36px', fontWeight: 'bold', color: '#fbbf24', textAlign: 'center' }, children: `₹${item.min}` } },
+                                    { type: 'span', props: { style: { width: '200px', fontSize: '36px', fontWeight: 'bold', color: '#4ade80', textAlign: 'right' }, children: `₹${item.max}` } }
+                                ]
+                            }
+                        })),
+                        // Footer
+                        {
+                            type: 'div',
+                            props: {
+                                style: {
+                                    marginTop: 'auto',
+                                    padding: '20px',
+                                    display: 'flex',
+                                    justifyContent: 'center'
+                                },
+                                children: {
+                                    type: 'span',
+                                    props: {
+                                        style: { fontSize: '24px', color: '#cbd5e1' },
+                                        children: 'DailyDhandora.com - किसानों का साथी'
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            { width, height, fonts }
+        );
 
-            rowsSvg += `
-                <rect x="100" y="${rowY - 35}" width="1000" height="60" rx="5" ${bg} />
-                <text x="150" y="${rowY + 10}" class="row-text" font-size="36" fill="#fff">${item.crop}</text>
-                <text x="600" y="${rowY + 10}" class="row-text" font-size="36" fill="#fbbf24" text-anchor="middle">₹${item.min}</text>
-                <text x="1050" y="${rowY + 10}" class="row-text" font-size="36" fill="#4ade80" text-anchor="end">₹${item.max}</text>
-            `;
-            rowY += 80;
-        });
-
-        const footerSvg = `
-             <text x="${width / 2}" y="${height - 30}" font-family="sans-serif" font-size="24" fill="#cbd5e1" text-anchor="middle">
-                DailyDhandora.com - किसानों का साथी
-             </text>
-        `;
-
-        const finalSvg = bgSvg.replace('</svg>', `${rowsSvg}${footerSvg}</svg>`);
+        // Convert SVG to PNG
+        const pngBuffer = svgToPng(svg, width);
 
         // Composite Logo if available
         let logoBuffer = null;
@@ -282,25 +388,14 @@ async function generateMandiCard(rates, date) {
             logoBuffer = await sharp(LOGO_PATH).resize(120).toBuffer();
         }
 
-        const compositeOps = [
-            { input: Buffer.from(finalSvg), top: 0, left: 0 }
-        ];
-
         if (logoBuffer) {
-            compositeOps.push({ input: logoBuffer, top: 10, left: 20 });
+            return await sharp(pngBuffer)
+                .composite([{ input: logoBuffer, top: 10, left: 20 }])
+                .png()
+                .toBuffer();
         }
 
-        return await sharp({
-            create: {
-                width: width,
-                height: height,
-                channels: 4,
-                background: { r: 0, g: 0, b: 0, alpha: 0 }
-            }
-        })
-            .composite(compositeOps)
-            .png()
-            .toBuffer();
+        return Buffer.from(pngBuffer);
 
     } catch (e) {
         console.error("❌ [Mandi Card] Error:", e);
@@ -317,90 +412,159 @@ async function generateMandiCard(rates, date) {
 async function generateEduCard(headline, date) {
     try {
         await ensureFont();
-        const fontBase64 = getFontBase64();
+        const fonts = getSatoriFonts();
 
         const width = 1200;
         const height = 675;
+        const lines = wrapText(headline, 35);
 
-        // SVG Construction
-        const bgSvg = `
-        <svg width="${width}" height="${height}">
-            <defs>
-                <style>
-                    @font-face {
-                        font-family: 'Noto Sans Devanagari';
-                        src: url(data:font/ttf;base64,${fontBase64});
-                    }
-                    .header-text { font-family: 'Noto Sans Devanagari', sans-serif; font-weight: bold; }
-                    .main-text { font-family: 'Noto Sans Devanagari', sans-serif; font-weight: bold; }
-                </style>
-                <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" /> <!-- Royal Blue -->
-                    <stop offset="100%" style="stop-color:#172554;stop-opacity:1" /> <!-- Darker Blue -->
-                </linearGradient>
-            </defs>
-            <rect width="${width}" height="${height}" fill="url(#bgGrad)" />
-            
-            <!-- Header -->
-            <rect x="0" y="0" width="${width}" height="100" fill="#facc15" /> <!-- Yellow -->
-            <text x="${width / 2}" y="70" class="header-text" font-size="48" fill="#000" text-anchor="middle">
-                राजस्थान शिक्षा विभाग अपडेट
-            </text>
+        // Create Education Card using Satori
+        const svg = await satori(
+            {
+                type: 'div',
+                props: {
+                    style: {
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        background: 'linear-gradient(to bottom, #1e3a8a, #172554)',
+                        fontFamily: 'Noto Sans Devanagari'
+                    },
+                    children: [
+                        // Header
+                        {
+                            type: 'div',
+                            props: {
+                                style: {
+                                    backgroundColor: '#facc15',
+                                    padding: '20px',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
+                                },
+                                children: {
+                                    type: 'span',
+                                    props: {
+                                        style: {
+                                            fontSize: '48px',
+                                            fontWeight: 'bold',
+                                            color: '#000'
+                                        },
+                                        children: 'राजस्थान शिक्षा विभाग अपडेट'
+                                    }
+                                }
+                            }
+                        },
+                        // Date Badge
+                        {
+                            type: 'div',
+                            props: {
+                                style: {
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                    padding: '20px 50px 0 0'
+                                },
+                                children: {
+                                    type: 'div',
+                                    props: {
+                                        style: {
+                                            backgroundColor: 'rgba(255,255,255,0.2)',
+                                            padding: '10px 30px',
+                                            borderRadius: '20px',
+                                            fontSize: '20px',
+                                            fontWeight: 'bold',
+                                            color: 'white'
+                                        },
+                                        children: date
+                                    }
+                                }
+                            }
+                        },
+                        // Central Content Box
+                        {
+                            type: 'div',
+                            props: {
+                                style: {
+                                    flex: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    padding: '30px 100px'
+                                },
+                                children: {
+                                    type: 'div',
+                                    props: {
+                                        style: {
+                                            backgroundColor: 'rgba(255,255,255,0.1)',
+                                            border: '2px solid rgba(255,255,255,0.3)',
+                                            borderRadius: '15px',
+                                            padding: '40px 50px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '100%'
+                                        },
+                                        children: lines.map(line => ({
+                                            type: 'div',
+                                            props: {
+                                                style: {
+                                                    fontSize: '52px',
+                                                    fontWeight: 'bold',
+                                                    color: 'white',
+                                                    textAlign: 'center',
+                                                    lineHeight: 1.4
+                                                },
+                                                children: line
+                                            }
+                                        }))
+                                    }
+                                }
+                            }
+                        },
+                        // Footer
+                        {
+                            type: 'div',
+                            props: {
+                                style: {
+                                    padding: '20px',
+                                    display: 'flex',
+                                    justifyContent: 'center'
+                                },
+                                children: {
+                                    type: 'span',
+                                    props: {
+                                        style: { fontSize: '24px', color: '#cbd5e1' },
+                                        children: 'DailyDhandora.com - Education Portal'
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            { width, height, fonts }
+        );
 
-            <!-- Date Badge -->
-            <rect x="${width - 250}" y="120" width="220" height="40" rx="20" fill="rgba(255,255,255,0.2)" />
-            <text x="${width - 140}" y="148" font-family="sans-serif" font-size="20" fill="#fff" text-anchor="middle" font-weight="bold">
-                ${date}
-            </text>
+        // Convert SVG to PNG
+        const pngBuffer = svgToPng(svg, width);
 
-            <!-- Central Content Box -->
-            <rect x="100" y="200" width="1000" height="300" rx="15" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.3)" stroke-width="2" />
-            
-            <!-- Headline Wrapped -->
-            ${(() => {
-                const lines = wrapText(headline, 35); // Wrap tighter for center box
-                let textSvg = '';
-                let startY = 280;
-                if (lines.length > 3) startY = 250; // Adjust if long
-
-                lines.forEach((line, i) => {
-                    textSvg += `<text x="${width / 2}" y="${startY + (i * 70)}" class="main-text" font-size="52" fill="#fff" text-anchor="middle">${line}</text>`;
-                });
-                return textSvg;
-            })()}
-
-            <!-- Footer -->
-             <text x="${width / 2}" y="${height - 30}" font-family="sans-serif" font-size="24" fill="#cbd5e1" text-anchor="middle">
-                DailyDhandora.com - Education Portal
-             </text>
-        </svg>
-        `;
-
-        // Composite Logo
+        // Composite Logo if available
         let logoBuffer = null;
         if (fs.existsSync(LOGO_PATH)) {
             logoBuffer = await sharp(LOGO_PATH).resize(120).toBuffer();
         }
 
-        const compositeOps = [
-            { input: Buffer.from(bgSvg), top: 0, left: 0 }
-        ];
-
         if (logoBuffer) {
-            compositeOps.push({ input: logoBuffer, top: 10, left: 20 });
+            return await sharp(pngBuffer)
+                .composite([{ input: logoBuffer, top: 10, left: 20 }])
+                .png()
+                .toBuffer();
         }
 
-        return await sharp({
-            create: {
-                width: width,
-                height: height,
-                channels: 4,
-                background: { r: 0, g: 0, b: 0, alpha: 0 }
-            }
-        })
-            .composite(compositeOps)
-            .png()
-            .toBuffer();
+        return Buffer.from(pngBuffer);
 
     } catch (e) {
         console.error("❌ [Edu Card] Error:", e);

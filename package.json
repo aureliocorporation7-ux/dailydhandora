@@ -13,6 +13,7 @@
     "@ducanh2912/next-pwa": "^10.2.9",
     "@google/generative-ai": "latest",
     "@huggingface/inference": "latest",
+    "@resvg/resvg-js": "^2.6.2",
     "axios": "latest",
     "cheerio": "^1.1.2",
     "cloudinary": "^2.8.0",
@@ -29,6 +30,7 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "rss-parser": "latest",
+    "satori": "^0.18.3",
     "sharp": "latest",
     "ws": "^8.19.0",
     "yargs": "latest"
