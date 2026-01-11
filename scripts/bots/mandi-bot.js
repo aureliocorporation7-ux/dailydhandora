@@ -5,6 +5,8 @@ const imageGen = require('../services/image-gen');
 const newsCardGen = require('../services/news-card-gen');
 const dbService = require('../services/db-service');
 const { getCategoryFallback } = require('../../lib/stockImages');
+const { getReadableDate } = require('../../lib/dateUtils');
+const { getPrompt, fillTemplate } = require('../services/prompt-service');
 
 const BHASKAR_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -21,7 +23,7 @@ async function scrapeBhaskarArticle(url) {
 async function run() {
     console.log("\n🌾 [Mandi Bot] Mode: PASSIVE (Interceptor Standby)");
     console.log("     ℹ️ Waiting for News Bot to feed Mandi updates...");
-    
+
     // Heartbeat update only
     const settings = await dbService.getBotSettings();
     if (settings.isBotActive) {
@@ -38,47 +40,35 @@ async function processRawMandiData(rawHeadline, rawBody, sourceUrl, settings, en
 
     // Context Configuration
     const now = new Date();
-    const todayIST = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
+    const todayIST = getReadableDate();
     const todayYMD = now.toISOString().split('T')[0];
 
     const yest = new Date(now);
     yest.setDate(yest.getDate() - 1);
     const yesterdayIST = yest.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
-    
+
     // We pass Today as the anchor, but the prompt handles the window.
     console.log(`     📅 Smart Date Window: ${yesterdayIST} to ${todayIST}`);
 
     // 1. AI WRITER & EXTRACTION
-    const prompt = `
-    ROLE: You are the Mandi Market Analyst for 'DailyDhandora'.
-    
-    CRITICAL CONTEXT:
-    Today is: ${todayIST}
-    Yesterday was: ${yesterdayIST}
-    
-    SOURCE MATERIAL:
-    Headline: ${rawHeadline}
-    Content: ${rawBody.substring(0, 3000)}
-    
-    TASK:
-    1. Extract Mandi Rates (Bhav).
-    2. VALIDITY CHECK (Smart Window):
-       - Accept rates if they are for TODAY OR YESTERDAY.
-       - If the text EXPLICITLY mentions a date OLDER than ${yesterdayIST} (more than 48h ago), RETURN NULL.
-       - If NO specific date is mentioned, ASSUME they are fresh/latest and valid.
-    3. Extract the effective date of the rates. If unknown, use Today's date (${todayYMD}).
-    
-    OUTPUT JSON FORMAT (Return NULL if older than 48h):
-    {
-      "headline": "Nagaur/Merta Mandi Bhav Update (DD-MM-YYYY)", 
-      "content": "HTML body with <ul><li> for rates.",
-      "rates": [ 
-         { "crop": "Jeera", "min": "5000", "max": "6000" }
-      ],
-      "tags": ["Mandi Bhav", "Nagaur"],
-      "date": "YYYY-MM-DD" 
-    }
+    // 🧠 DYNAMIC PROMPT (Hybrid)
+    const DEFAULT_MANDI_PROMPT = `
+    ROLE: Mandi Analyst.
+    CONTEXT: Today: {{today}}, Yesterday: {{yesterday}}.
+    SOURCE: {{headline}} / {{content}}
+    TASK: Extract Rates.
+    VALIDITY: Only Today/Yesterday.
+    OUTPUT: JSON { "rates": [], "date": "..." }
     `;
+
+    const rawPrompt = await getPrompt('PROMPT_USER_MANDI', DEFAULT_MANDI_PROMPT);
+    const prompt = fillTemplate(rawPrompt, {
+        today: todayIST,
+        yesterday: yesterdayIST,
+        headline: rawHeadline,
+        content: rawBody.substring(0, 3000),
+        todayYMD: todayYMD
+    });
 
     const aiData = await aiWriter.writeArticle(prompt);
     if (!aiData || !aiData.headline) {

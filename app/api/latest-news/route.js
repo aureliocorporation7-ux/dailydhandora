@@ -62,42 +62,33 @@ export async function GET(request) {
     };
 
     // Helper to fetch articles for a specific category
-    // Uses in-memory filtering for Nagaur to handle Unicode variations
     const fetchCategory = async (hindiCategory, categoryKey) => {
       try {
         let snapshot;
 
         if (categoryKey === 'news') {
-          // For Nagaur, fetch recent published articles and filter in memory
-          // This handles all Unicode variations of "नागौर न्यूज़"
-          console.log(`[API] Using in-memory filter for Nagaur...`);
+          // STANDARD QUERY: Now that DB is standardized, we search for the exact category.
           snapshot = await db.collection('articles')
+            .where('category', '==', 'नागौर न्यूज़')
             .where('status', '==', 'published')
             .orderBy('createdAt', 'desc')
-            .limit(100)  // Fetch more to find Nagaur articles
+            .limit(fetchLimit)
             .get();
 
-          // Filter in memory for categories containing "नागौर"
-          const nagaurDocs = snapshot.docs.filter(doc => {
-            const cat = doc.data().category || '';
-            return cat.includes('नागौर');
-          });
+          console.log(`[API] ✅ Query 'Nagaur News': Found ${snapshot.size} docs.`);
 
-          console.log(`[API] ✅ Found ${nagaurDocs.length} Nagaur articles (in-memory filter)`);
-          return nagaurDocs.slice(0, fetchLimit).map(transformDoc);
         } else {
-          // Normal exact match for other categories
+          // Standard Query for single-variation categories
           snapshot = await db.collection('articles')
             .where('category', '==', hindiCategory)
             .where('status', '==', 'published')
             .orderBy('createdAt', 'desc')
             .limit(fetchLimit)
             .get();
+        }
 
-          if (snapshot.docs.length > 0) {
-            console.log(`[API] ✅ Found ${snapshot.docs.length} articles for "${categoryKey}"`);
-            return snapshot.docs.map(transformDoc);
-          }
+        if (!snapshot.empty) {
+          return snapshot.docs.map(transformDoc);
         }
 
         console.log(`[API] ⚠️ No articles found for "${hindiCategory}"`);

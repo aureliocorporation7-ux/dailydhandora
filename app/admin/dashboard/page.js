@@ -27,11 +27,14 @@ import {
   AlertTriangle,
   ChevronDown,
   Clock,
-  TrendingUp
+  TrendingUp,
+  Brain
 } from 'lucide-react';
+import PromptEditor from '../components/PromptEditor';
 
 export default function Dashboard() {
   const router = useRouter();
+  const [activeView, setActiveView] = useState('content'); // 'content' | 'ai-settings'
   const [mode, setMode] = useState('loading');
   const [imageGen, setImageGen] = useState(true);
   const [audioGen, setAudioGen] = useState(true);
@@ -356,10 +359,22 @@ export default function Dashboard() {
         </div>
 
         <nav className="p-4 space-y-2">
-          <Link href="/admin/dashboard" className="flex items-center gap-3 px-4 py-3 bg-white/10 rounded-xl text-white font-medium">
+          <button
+            onClick={() => setActiveView('content')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeView === 'content' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
             <LayoutDashboard size={20} />
-            Dashboard
-          </Link>
+            Content
+          </button>
+
+          <button
+            onClick={() => setActiveView('ai-settings')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeView === 'ai-settings' ? 'bg-purple-500/10 text-purple-400' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <Brain size={20} />
+            AI Brain
+          </button>
+
           <Link href="/admin/analytics" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all">
             <BarChart3 size={20} />
             Analytics
@@ -376,10 +391,10 @@ export default function Dashboard() {
                     key={m}
                     onClick={() => updateMode(m)}
                     className={`flex-1 py-2 text-xs font-bold uppercase rounded-md transition-all ${mode === m
-                        ? m === 'auto' ? 'bg-green-600 text-white'
-                          : m === 'manual' ? 'bg-yellow-500 text-black'
-                            : 'bg-red-600 text-white'
-                        : 'text-slate-400 hover:text-white'
+                      ? m === 'auto' ? 'bg-green-600 text-white'
+                        : m === 'manual' ? 'bg-yellow-500 text-black'
+                          : 'bg-red-600 text-white'
+                      : 'text-slate-400 hover:text-white'
                       }`}
                   >
                     {m}
@@ -445,208 +460,214 @@ export default function Dashboard() {
         </header>
 
         <div className="p-6 max-w-7xl mx-auto">
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-2xl p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                  <Clock size={20} className="text-blue-400" />
-                </div>
-                <span className="text-blue-400 text-xs font-semibold uppercase tracking-wider">Today</span>
-              </div>
-              <p className="text-3xl font-bold">{stats.todayCount}</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-yellow-500/10 to-amber-600/5 border border-yellow-500/20 rounded-2xl p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center">
-                  <FileText size={20} className="text-yellow-400" />
-                </div>
-                <span className="text-yellow-400 text-xs font-semibold uppercase tracking-wider">Drafts</span>
-              </div>
-              <p className="text-3xl font-bold">{stats.draftCount}</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-500/10 to-emerald-600/5 border border-green-500/20 rounded-2xl p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center">
-                  <Rocket size={20} className="text-green-400" />
-                </div>
-                <span className="text-green-400 text-xs font-semibold uppercase tracking-wider">Published</span>
-              </div>
-              <p className="text-3xl font-bold">{stats.publishedCount}</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-500/10 to-violet-600/5 border border-purple-500/20 rounded-2xl p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                  <TrendingUp size={20} className="text-purple-400" />
-                </div>
-                <span className="text-purple-400 text-xs font-semibold uppercase tracking-wider">Views</span>
-              </div>
-              <p className="text-3xl font-bold">{stats.totalViews.toLocaleString()}</p>
-            </div>
-          </div>
-
-          {/* Filters Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-slate-800/30 p-4 rounded-2xl border border-white/5">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setFilter('draft')}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${filter === 'draft' ? 'bg-yellow-500 text-black' : 'bg-white/5 text-slate-400 hover:text-white'}`}
-              >
-                Drafts ({stats.draftCount})
-              </button>
-              <button
-                onClick={() => setFilter('published')}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${filter === 'published' ? 'bg-green-500 text-black' : 'bg-white/5 text-slate-400 hover:text-white'}`}
-              >
-                Published ({stats.publishedCount})
-              </button>
-            </div>
-
-            <div className="relative">
-              <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="pl-10 pr-8 py-2 bg-slate-800 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-orange-500 appearance-none cursor-pointer min-w-[180px]"
-              >
-                {categories.map(cat => (
-                  <option key={cat.value} value={cat.value}>{cat.label}</option>
-                ))}
-              </select>
-              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Articles Grid */}
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="h-72 bg-slate-800/50 rounded-2xl animate-pulse" />
-              ))}
-            </div>
-          ) : articles.length === 0 ? (
-            <div className="text-center py-20 bg-slate-800/30 rounded-2xl border border-dashed border-white/10">
-              <FileText size={48} className="mx-auto text-slate-600 mb-4" />
-              <p className="text-slate-400 text-lg">No articles found</p>
-              <p className="text-slate-500 text-sm">Try changing filters or create a new article</p>
-            </div>
+          {activeView === 'ai-settings' ? (
+            <PromptEditor />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {articles.map(article => (
-                <div key={article.id} className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-orange-500/30 transition-all hover:shadow-xl hover:shadow-orange-500/5">
-                  <div className="relative h-44 w-full overflow-hidden">
-                    <Image
-                      src={article.imageUrl || '/placeholder.png'}
-                      alt="Cover"
-                      fill
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      unoptimized
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
-                    <span className="absolute top-3 right-3 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-wider border border-white/10">
-                      {article.category}
-                    </span>
-                  </div>
-
-                  <div className="p-5">
-                    <h3 className="text-base font-bold leading-tight mb-3 text-white/90 group-hover:text-white line-clamp-2">
-                      {article.headline}
-                    </h3>
-
-                    <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
-                      <Clock size={12} />
-                      <span>{new Date(article.createdAt).toLocaleDateString()}</span>
-                      {article.views > 0 && (
-                        <>
-                          <span>•</span>
-                          <Eye size={12} />
-                          <span>{article.views} views</span>
-                        </>
-                      )}
+            <>
+              {/* Quick Stats */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-2xl p-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                      <Clock size={20} className="text-blue-400" />
                     </div>
-
-                    <div className="flex gap-2">
-                      {filter === 'draft' && (
-                        <button
-                          onClick={() => publishArticle(article.id)}
-                          className="flex-1 flex items-center justify-center gap-1 bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all"
-                        >
-                          <Rocket size={14} />
-                          Publish
-                        </button>
-                      )}
-                      {!article.audioUrl && (
-                        <button
-                          onClick={() => generateAudio(article)}
-                          className="p-2 bg-white/5 hover:bg-purple-500/20 text-slate-400 hover:text-purple-400 rounded-lg transition-all"
-                          title="Generate Audio"
-                        >
-                          <Mic size={16} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => openEditModal(article)}
-                        className="p-2 bg-white/5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 rounded-lg transition-all"
-                        title="Edit"
-                      >
-                        <Edit3 size={16} />
-                      </button>
-                      <button
-                        onClick={() => deleteArticle(article.id)}
-                        className="p-2 bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-all"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                      <a
-                        href={`/article/${article.id}`}
-                        target="_blank"
-                        className="p-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-all"
-                        title="Preview"
-                      >
-                        <Eye size={16} />
-                      </a>
-                    </div>
+                    <span className="text-blue-400 text-xs font-semibold uppercase tracking-wider">Today</span>
                   </div>
+                  <p className="text-3xl font-bold">{stats.todayCount}</p>
                 </div>
-              ))}
-            </div>
-          )}
 
-          {/* Danger Zone */}
-          <div className="mt-12 bg-red-950/30 border border-red-900/30 p-6 rounded-2xl">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertTriangle className="text-red-400" size={24} />
-              <h2 className="text-xl font-bold text-red-400">Danger Zone</h2>
-            </div>
-            <p className="text-slate-400 mb-6 text-sm">
-              Irreversible actions. Master password required.
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { cat: 'नागौर न्यूज़', display: 'Nagaur News', icon: '📰' },
-                { cat: 'मंडी भाव', display: 'Mandi Bhav', icon: '🌾' },
-                { cat: 'सरकारी योजना', display: 'Schemes', icon: '📜' },
-                { cat: 'भर्ती व रिजल्ट', display: 'Jobs', icon: '🎓' },
-              ].map(item => (
-                <button
-                  key={item.cat}
-                  onClick={() => handleCleanCategory(item.cat, item.display)}
-                  disabled={cleanupLoading}
-                  className="flex flex-col items-center gap-2 p-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 hover:text-red-300 transition-all disabled:opacity-50"
-                >
-                  <span className="text-2xl">{item.icon}</span>
-                  <span className="text-xs font-bold uppercase tracking-wider">Delete {item.display}</span>
-                </button>
-              ))}
-            </div>
-            {cleanupLoading && <p className="mt-4 text-yellow-400 text-center animate-pulse">Processing...</p>}
-            {cleanupMessage && <p className="mt-4 text-green-400 text-center font-bold bg-green-900/20 p-2 rounded-lg">{cleanupMessage}</p>}
-            {cleanupError && <p className="mt-4 text-red-400 text-center font-bold bg-red-900/20 p-2 rounded-lg">{cleanupError}</p>}
-          </div>
+                <div className="bg-gradient-to-br from-yellow-500/10 to-amber-600/5 border border-yellow-500/20 rounded-2xl p-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-yellow-500/20 rounded-xl flex items-center justify-center">
+                      <FileText size={20} className="text-yellow-400" />
+                    </div>
+                    <span className="text-yellow-400 text-xs font-semibold uppercase tracking-wider">Drafts</span>
+                  </div>
+                  <p className="text-3xl font-bold">{stats.draftCount}</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-green-500/10 to-emerald-600/5 border border-green-500/20 rounded-2xl p-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center">
+                      <Rocket size={20} className="text-green-400" />
+                    </div>
+                    <span className="text-green-400 text-xs font-semibold uppercase tracking-wider">Published</span>
+                  </div>
+                  <p className="text-3xl font-bold">{stats.publishedCount}</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-purple-500/10 to-violet-600/5 border border-purple-500/20 rounded-2xl p-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
+                      <TrendingUp size={20} className="text-purple-400" />
+                    </div>
+                    <span className="text-purple-400 text-xs font-semibold uppercase tracking-wider">Views</span>
+                  </div>
+                  <p className="text-3xl font-bold">{stats.totalViews.toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Filters Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-slate-800/30 p-4 rounded-2xl border border-white/5">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setFilter('draft')}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${filter === 'draft' ? 'bg-yellow-500 text-black' : 'bg-white/5 text-slate-400 hover:text-white'}`}
+                  >
+                    Drafts ({stats.draftCount})
+                  </button>
+                  <button
+                    onClick={() => setFilter('published')}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${filter === 'published' ? 'bg-green-500 text-black' : 'bg-white/5 text-slate-400 hover:text-white'}`}
+                  >
+                    Published ({stats.publishedCount})
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="pl-10 pr-8 py-2 bg-slate-800 border border-white/10 rounded-lg text-sm focus:outline-none focus:border-orange-500 appearance-none cursor-pointer min-w-[180px]"
+                  >
+                    {categories.map(cat => (
+                      <option key={cat.value} value={cat.value}>{cat.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Articles Grid */}
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="h-72 bg-slate-800/50 rounded-2xl animate-pulse" />
+                  ))}
+                </div>
+              ) : articles.length === 0 ? (
+                <div className="text-center py-20 bg-slate-800/30 rounded-2xl border border-dashed border-white/10">
+                  <FileText size={48} className="mx-auto text-slate-600 mb-4" />
+                  <p className="text-slate-400 text-lg">No articles found</p>
+                  <p className="text-slate-500 text-sm">Try changing filters or create a new article</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {articles.map(article => (
+                    <div key={article.id} className="group bg-slate-800/40 border border-white/5 rounded-2xl overflow-hidden hover:border-orange-500/30 transition-all hover:shadow-xl hover:shadow-orange-500/5">
+                      <div className="relative h-44 w-full overflow-hidden">
+                        <Image
+                          src={article.imageUrl || '/placeholder.png'}
+                          alt="Cover"
+                          fill
+                          className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          unoptimized
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
+                        <span className="absolute top-3 right-3 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-wider border border-white/10">
+                          {article.category}
+                        </span>
+                      </div>
+
+                      <div className="p-5">
+                        <h3 className="text-base font-bold leading-tight mb-3 text-white/90 group-hover:text-white line-clamp-2">
+                          {article.headline}
+                        </h3>
+
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
+                          <Clock size={12} />
+                          <span>{new Date(article.createdAt).toLocaleDateString()}</span>
+                          {article.views > 0 && (
+                            <>
+                              <span>•</span>
+                              <Eye size={12} />
+                              <span>{article.views} views</span>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2">
+                          {filter === 'draft' && (
+                            <button
+                              onClick={() => publishArticle(article.id)}
+                              className="flex-1 flex items-center justify-center gap-1 bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all"
+                            >
+                              <Rocket size={14} />
+                              Publish
+                            </button>
+                          )}
+                          {!article.audioUrl && (
+                            <button
+                              onClick={() => generateAudio(article)}
+                              className="p-2 bg-white/5 hover:bg-purple-500/20 text-slate-400 hover:text-purple-400 rounded-lg transition-all"
+                              title="Generate Audio"
+                            >
+                              <Mic size={16} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openEditModal(article)}
+                            className="p-2 bg-white/5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 rounded-lg transition-all"
+                            title="Edit"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button
+                            onClick={() => deleteArticle(article.id)}
+                            className="p-2 bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          <a
+                            href={`/article/${article.id}`}
+                            target="_blank"
+                            className="p-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-all"
+                            title="Preview"
+                          >
+                            <Eye size={16} />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Danger Zone */}
+              <div className="mt-12 bg-red-950/30 border border-red-900/30 p-6 rounded-2xl">
+                <div className="flex items-center gap-3 mb-4">
+                  <AlertTriangle className="text-red-400" size={24} />
+                  <h2 className="text-xl font-bold text-red-400">Danger Zone</h2>
+                </div>
+                <p className="text-slate-400 mb-6 text-sm">
+                  Irreversible actions. Master password required.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { cat: 'नागौर न्यूज़', display: 'Nagaur News', icon: '📰' },
+                    { cat: 'मंडी भाव', display: 'Mandi Bhav', icon: '🌾' },
+                    { cat: 'सरकारी योजना', display: 'Schemes', icon: '📜' },
+                    { cat: 'भर्ती व रिजल्ट', display: 'Jobs', icon: '🎓' },
+                  ].map(item => (
+                    <button
+                      key={item.cat}
+                      onClick={() => handleCleanCategory(item.cat, item.display)}
+                      disabled={cleanupLoading}
+                      className="flex flex-col items-center gap-2 p-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-xl text-red-400 hover:text-red-300 transition-all disabled:opacity-50"
+                    >
+                      <span className="text-2xl">{item.icon}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider">Delete {item.display}</span>
+                    </button>
+                  ))}
+                </div>
+                {cleanupLoading && <p className="mt-4 text-yellow-400 text-center animate-pulse">Processing...</p>}
+                {cleanupMessage && <p className="mt-4 text-green-400 text-center font-bold bg-green-900/20 p-2 rounded-lg">{cleanupMessage}</p>}
+                {cleanupError && <p className="mt-4 text-red-400 text-center font-bold bg-red-900/20 p-2 rounded-lg">{cleanupError}</p>}
+              </div>
+            </>
+          )}
         </div>
       </main>
 

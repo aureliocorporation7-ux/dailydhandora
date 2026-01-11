@@ -7,28 +7,50 @@ const newsCardGen = require('../services/news-card-gen');
 const dbService = require('../services/db-service');
 const { generateAndStoreAudio } = require('../services/audio-gen');
 const { getCategoryFallback } = require('../../lib/stockImages');
+const { isFresh } = require('../../lib/dateUtils');
+const { getPrompt, fillTemplate } = require('../services/prompt-service');
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * Helper: Checks if a date string refers to today.
- */
-function isToday(dateStr) {
-    if (!dateStr) return false;
+// ========================================== 
+// 0. CORE: FAULT-TOLERANT SCRAPING HELPER
+// ========================================== 
+async function scrapeWithFallback(url, primaryScraperFn) {
+    // --- PLAN A: Primary Scraper (Cheerio) ---
     try {
-        const articleDate = new Date(dateStr);
-        const options = { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'numeric', year: 'numeric' };
-
-        const artDateStr = articleDate.toLocaleDateString('en-IN', options);
-        const todayStr = new Date().toLocaleDateString('en-IN', options);
-
-        return artDateStr === todayStr;
+        const result = await primaryScraperFn(url);
+        if (result && result.body && result.body.length > 200) {
+            return result; // ✅ Plan A Success
+        }
+        console.log(`     ⚠️ [Scraper] Plan A failed/short for: ${url}. Initiating Fallback...`);
     } catch (e) {
-        return false;
+        console.log(`     ⚠️ [Scraper] Plan A Error: ${e.message}. Initiating Fallback...`);
     }
+
+    // --- PLAN B: Jina Reader API (The Savior) ---
+    try {
+        console.log(`     🛡️ [Scraper] Invoking Plan B (Jina AI)...`);
+        const { data } = await axios.get(`https://r.jina.ai/${url}`, {
+            headers: { 'Accept': 'application/json' },
+            timeout: 20000
+        });
+
+        if (data && data.data && data.data.content) {
+            console.log(`     ✅ [Scraper] Plan B Success (Jina)!`);
+            return {
+                headline: data.data.title || "News Update",
+                body: data.data.content
+            };
+        }
+    } catch (e) {
+        console.log(`     ❌ [Scraper] Plan B Failed: ${e.message}`);
+    }
+
+    console.log(`     ❌ [Scraper] CRITICAL: All methods failed for ${url}`);
+    return null;
 }
+
+
 
 /**
  * 🛡️ FINAL SAFETY LAYER: SANITIZER
@@ -75,23 +97,21 @@ const BHASKAR_HEADERS = {
 };
 
 async function scrapeBhaskarArticle(url) {
-    console.log(`     🕸️ [Bhaskar] Scraping Content: ${url}`);
-    try {
-        const { data } = await axios.get(url, {
+    return scrapeWithFallback(url, async (targetUrl) => {
+        console.log(`     🕸️ [Bhaskar] Plan A (Cheerio): ${targetUrl}`);
+        const { data } = await axios.get(targetUrl, {
             headers: BHASKAR_HEADERS,
             timeout: 15000
         });
         const $ = cheerio.load(data);
 
-        // REMOVED STRICT DATE CHECK: Relying on DB duplicate check instead.
-        // This ensures we don't miss late-night news fetched the next morning.
-        /*
-        let pubDate = $('meta[property="article:published_time"]').attr('content');
-        if (pubDate && !isToday(pubDate)) {
+        // ✅ STRICT DATE CHECK ENABLED (Today + Yesterday allowed)
+        let pubDate = $('meta[property="article:published_time"]').attr('content') ||
+            $('meta[name="publish-date"]').attr('content');
+        if (pubDate && !isFresh(pubDate)) {
             console.log(`     📅 [Bhaskar] Skipping: Old news from ${pubDate}`);
-            return null;
+            throw new Error("Old News"); // Throw to stop fallback if news is just old
         }
-        */
 
         const headline = $('h1').first().text().trim();
         let bodyText = '';
@@ -119,14 +139,8 @@ async function scrapeBhaskarArticle(url) {
             });
         }
 
-        if (bodyText.length > 100) {
-            return { headline, body: bodyText };
-        }
-        return null;
-    } catch (e) {
-        console.log(`     ❌ [Bhaskar] Scraping failed: ${e.message}`);
-        return null;
-    }
+        return { headline, body: bodyText };
+    });
 }
 
 async function fetchBhaskarNews(settings) {
@@ -252,20 +266,18 @@ async function fetchBhaskarNews(settings) {
 // 2. PATRIKA SCRAPER (FALLBACK)
 // ========================================== 
 async function scrapePatrikaArticle(url) {
-    console.log(`     🕸️ [Patrika] Scraping: ${url}`);
-    try {
-        const { data } = await axios.get(url, {
+    return scrapeWithFallback(url, async (targetUrl) => {
+        console.log(`     🕸️ [Patrika] Plan A (Cheerio): ${targetUrl}`);
+        const { data } = await axios.get(targetUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
             timeout: 10000
         });
         const $ = cheerio.load(data);
 
         // --- STRICT DATE CHECK (Today Only) ---
-        // Patrika uses JSON-LD or meta tags
         let pubDate = $('meta[property="article:published_time"]').attr('content') ||
             $('meta[name="publish-date"]').attr('content');
 
-        // Also check JSON-LD if meta fails
         if (!pubDate) {
             const ldJson = $('script[type="application/ld+json"]').html();
             if (ldJson) {
@@ -274,9 +286,9 @@ async function scrapePatrikaArticle(url) {
             }
         }
 
-        if (pubDate && !isToday(pubDate)) {
+        if (pubDate && !isFresh(pubDate)) {
             console.log(`     📅 [Patrika] Skipping: Old news from ${pubDate}`);
-            return null;
+            throw new Error("Old News");
         }
 
         $('script, style, nav, footer, header, .advertisement, .ads, .sidebar, .comments, .related-posts').remove();
@@ -288,13 +300,8 @@ async function scrapePatrikaArticle(url) {
         });
 
         const headline = $('h1').first().text().trim() || "Nagaur News";
-
-        if (body.length > 100) return { headline, body };
-        return null;
-    } catch (e) {
-        console.log(`     ❌ [Patrika] Scraping failed: ${e.message}`);
-        return null;
-    }
+        return { headline, body };
+    });
 }
 
 async function fetchPatrikaNews(settings) {
@@ -349,38 +356,27 @@ async function fetchPatrikaNews(settings) {
 // 3. COMMON PROCESSING (AI + DB)
 // ========================================== 
 async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, settings) {
-    // Supreme Level Prompt
-    const promptContent = `
-    ROLE: You are the Senior Editor for 'DailyDhandora', Nagaur's most trusted digital news portal.
-    
-    SOURCE MATERIAL:
-    Headline: ${rawHeadline}
-    Raw Text: ${rawBody.substring(0, 3000)}
-    Original Source: ${sourceName}
-    
-    YOUR TASK:
-    Write a high-quality news report in Hindi based ONLY on the source material.
-    
+    // 🧠 DYNAMIC PROMPT (Hybrid: DB > Code)
+    const DEFAULT_USER_PROMPT = `
+    ROLE: Senior Editor for DailyDhandora.
+    SOURCE:
+    Headline: {{headline}}
+    Raw Text: {{body}}
+    Source: {{sourceName}}
+    TASK: Write Hindi news report.
     GUIDELINES:
-    1. **Headline:** Create a punchy, click-worthy Hindi headline (max 15 words). Include the specific location (e.g., Merta, Ladnun).
-    2. **Lead Paragraph:** Start with the most important update (Who, What, Where, When).
-    3. **Details:** Use bullet points (<ul><li>) for key facts or timeline.
-    4. **Tone:** Professional, Objective, Journalistic. No flowery language or "AI fluff".
-    5. **Accuracy:** DO NOT invent facts. If date/time is missing, don't guess.
-    6. **ORIGINALITY RULE (CRITICAL):**
-       - **SIGN-OFF HIERARCHY (TIER 1 > TIER 2):**
-         - **Tier 1 (Tehsil Match):** If text contains [Degana, Merta, Jayal, Didwana, Kuchaman, Makrana, Ladnun, Parbatsar, Nawa, Mundwa, Khinvsar, Riyan Bari], write: "हमारे **[Tehsil]** संवाददाता के अनुसार..."
-         - **Tier 2 (Fallback):** If NO Tehsil found, write: "हमारे **नागौर** संवाददाता के अनुसार..."
-       - **PROHIBITED:** NEVER use Village names (e.g. Chandarun).
-       - **No Rivals:** NEVER mention "Dainik Bhaskar" or "Patrika".
-    
-    OUTPUT FORMAT:
-    Return a JSON object with:
-    - "headline": (Your Hindi Headline)
-    - "content": (HTML formatted body: <p>, <h3>, <ul>, <li>)
-    - "tags": (Array of relevant tags like 'Nagaur News', 'Crime', 'Politics')
-    - "image_prompt": (A detailed English prompt for an image generator based on the news context)
+    1. Headline: Click-worthy, <15 words.
+    2. Content: 500 words, HTML (<ul>, <li>).
+    3. Rules: No rivals (Bhaskar/Patrika). Use "हमारे [Tehsil] संवाददाता".
+    OUTPUT: JSON { "headline": "...", "content": "..." }
     `;
+
+    const rawPrompt = await getPrompt('PROMPT_USER_NEWS', DEFAULT_USER_PROMPT);
+    const promptContent = fillTemplate(rawPrompt, {
+        headline: rawHeadline,
+        body: rawBody.substring(0, 3000),
+        sourceName: sourceName
+    });
 
     const aiData = await aiWriter.writeArticle(promptContent);
     if (!aiData || !aiData.headline) {

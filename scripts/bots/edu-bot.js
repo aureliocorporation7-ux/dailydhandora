@@ -5,6 +5,7 @@ const imageGen = require('../services/image-gen');
 const newsCardGen = require('../services/news-card-gen');
 const dbService = require('../services/db-service');
 const { getCategoryFallback } = require('../../lib/stockImages');
+const { isFresh, getISTDate } = require('../../lib/dateUtils');
 
 const BHASKAR_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -191,15 +192,10 @@ async function run() {
                 const article = await scrapeBhaskarArticle(link);
 
                 if (article && article.body.length > 100) {
-                    // 🛑 DATE FRESHNESS CHECK (24h Window)
-                    if (article.publishedTime) {
-                        const pubDate = new Date(article.publishedTime);
-                        const now = new Date();
-                        const diffHours = (now - pubDate) / (1000 * 60 * 60);
-                        if (diffHours > 24) {
-                            console.log(`     📅 [Edu Bot] Skipping OLD news (${diffHours.toFixed(1)}h old).`);
-                            continue;
-                        }
+                    // 🛑 DATE FRESHNESS CHECK (Shared Logic)
+                    if (article.publishedTime && !isFresh(article.publishedTime)) {
+                        console.log(`     📅 [Edu Bot] Skipping OLD news from ${article.publishedTime}`);
+                        continue;
                     }
 
                     // Double check content (Include URL in check for location safety)
