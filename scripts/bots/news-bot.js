@@ -215,39 +215,66 @@ async function fetchBhaskarNews(settings) {
         // 🌾 INTERCEPT: Check if this is actually Mandi Bhav news
         const checkText = (scrapedData.headline + " " + scrapedData.body).toLowerCase();
 
-        // Comprehensive Mandi Keywords (Hindi & English)
-        // CROPS: Jeera, Gwar, Moong, Isabgol, Saunf, Rayda, Sarson, Cotton
-        const cropKeywords = [
-            'jeera', 'moong', 'gwar', 'isabgol', 'saunf', 'cotton', 'rayda', 'sarson',
-            'जीरा', 'मूंग', 'ग्वार', 'ईसबगोल', 'सौंफ', 'कपास', 'रायड़ा', 'सरसों'
+        // ========================================
+        // 🛡️ STRICT MANDI DETECTION SYSTEM v2.0
+        // ========================================
+
+        // 1. PRICE PATTERN CHECK - Must have actual price data
+        // Pattern: numbers (3-6 digits) followed by rupee terms
+        const pricePattern = /(\d{3,6})\s*(रुपये|रुपए|रु\.?|₹|rs\.?|rupees?)/i;
+        const unitPattern = /(प्रति\s*क्विंटल|per\s*quintal|क्विंटल|quintal|\/क्विं)/i;
+        const hasPriceData = pricePattern.test(checkText) && unitPattern.test(checkText);
+
+        // 2. STRICT MANDI-SPECIFIC TERMS (not just crop names)
+        const strictMandiTerms = [
+            'मंडी भाव', 'मंडी रेट', 'मंडी में भाव', 'फसल भाव', 'फसल दर',
+            'बोली लगी', 'खरीदी हुई', 'आवक रही', 'कृषि उपज मंडी',
+            'mandi bhav', 'mandi rate', 'krishi upaj mandi'
         ];
+        const hasMandiContext = strictMandiTerms.some(t => checkText.includes(t));
 
-        // GENERAL TERMS: Mandi, Bhav, Krishi, Fasal, Boli, Rate
-        const generalKeywords = [
-            'mandi bhav', 'मंडी भाव', 'krishi upaj', 'कृषि उपज',
-            'bhav', 'भाव', 'fasal', 'फसल', 'boli', 'बोली', 'rate'
+        // 3. BLACKLIST - These words NEVER appear in Mandi news
+        const mandiBlacklist = [
+            // Sports
+            'कबड्डी', 'kabaddi', 'क्रिकेट', 'cricket', 'खेल', 'sport', 'प्रतियोगिता', 'competition',
+            'टूर्नामेंट', 'tournament', 'मैच', 'match', 'खिलाड़ी', 'player', 'टीम', 'team',
+            'स्वर्ण', 'gold medal', 'रजत', 'silver', 'कांस्य', 'bronze', 'पदक', 'medal',
+            // Crime/Police
+            'गिरफ्तार', 'arrest', 'हत्या', 'murder', 'पुलिस', 'police', 'थाना', 'fir',
+            'चोरी', 'theft', 'लूट', 'robbery', 'दुर्घटना', 'accident',
+            // Politics
+            'चुनाव', 'election', 'वोट', 'vote', 'नेता', 'विधायक', 'mla', 'mp', 'सांसद',
+            // Entertainment
+            'बॉलीवुड', 'bollywood', 'फिल्म', 'film', 'अभिनेता', 'actor'
         ];
+        const hasBlacklistedWord = mandiBlacklist.some(w => checkText.includes(w));
 
-        // LOCATIONS: Nagaur, Merta (Hindi & English)
-        const locationKeywords = [
-            'nagaur', 'merta', 'नागौर', 'मेड़ता'
-        ];
+        // 4. DECISION LOGIC:
+        // Route to Mandi ONLY if: (Has Price Data OR Has Strict Mandi Terms) AND NO Blacklisted Words
+        const shouldRouteToMandi = (hasPriceData || hasMandiContext) && !hasBlacklistedWord;
 
-        // Logic: (Crop OR General) AND (Location In Text OR Location In Headline)
-        // We use lowercase match. JavaScript strings handle Devanagari matching well.
-        const isMandiTerm = [...cropKeywords, ...generalKeywords].some(k => checkText.includes(k));
-        const isLocation = locationKeywords.some(k => checkText.includes(k));
-
-        if (isMandiTerm && isLocation) {
-
-            console.log(`\n  🌾 [News Bot] DETECTED MANDI NEWS: Redirecting to Mandi Bot logic...`);
+        if (shouldRouteToMandi) {
+            console.log(`\n  🌾 [News Bot] DETECTED MANDI NEWS (Strict Check Passed)`);
+            console.log(`     📊 Price Pattern: ${hasPriceData}, Mandi Terms: ${hasMandiContext}, Blacklist: ${hasBlacklistedWord}`);
 
             // Generate Enforced Date (Today's Date in IST)
             const todayIST = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
 
-            const mandiSuccess = await mandiBot.processRawMandiData(scrapedData.headline, scrapedData.body, item.link, settings, todayIST);
-            if (mandiSuccess) processedCount++;
-            continue; // Skip normal news processing
+            const mandiResult = await mandiBot.processRawMandiData(scrapedData.headline, scrapedData.body, item.link, settings, todayIST);
+
+            // 🛡️ REJECTION HANDLER: If Mandi Bot rejects, process as general news
+            if (mandiResult && mandiResult.rejected) {
+                console.log(`     ↩️ [News Bot] Mandi REJECTED (${mandiResult.reason}). Processing as General News...`);
+                const success = await processAndSave(scrapedData.headline, scrapedData.body, item.link, 'Dainik Bhaskar', settings);
+                if (success) processedCount++;
+            } else if (mandiResult === true) {
+                processedCount++;
+            }
+            continue; // Skip normal news processing either way
+        } else if (hasBlacklistedWord) {
+            // Log why it was blocked from Mandi
+            const matched = mandiBlacklist.find(w => checkText.includes(w));
+            console.log(`     🚫 [News Bot] Mandi BLOCKED: Found blacklisted term "${matched}"`);
         }
 
         console.log(`\n  ✨ [Bhaskar] NEW LATEST NEWS: ${scrapedData.headline}`);

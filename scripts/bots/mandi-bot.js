@@ -73,8 +73,36 @@ async function processRawMandiData(rawHeadline, rawBody, sourceUrl, settings, en
     const aiData = await aiWriter.writeArticle(prompt);
     if (!aiData || !aiData.headline) {
         console.log("     ❌ [Mandi Bot] AI Rejected (Data too old or invalid).");
-        return false;
+        return { rejected: true, reason: 'AI_FAILED' };
     }
+
+    // ========================================
+    // 🛡️ RATE VALIDATION LAYER v2.0
+    // ========================================
+
+    // CHECK 1: Must have rates array
+    if (!aiData.rates || !Array.isArray(aiData.rates) || aiData.rates.length === 0) {
+        console.log("     🚫 [Mandi Bot] REJECTED: No actual crop rates found in AI response.");
+        console.log("     ↩️ This content should be processed as general news instead.");
+        return { rejected: true, reason: 'NO_RATES' };
+    }
+
+    // CHECK 2: At least one rate must have valid values (not N/A)
+    const validRates = aiData.rates.filter(r => {
+        const min = String(r.min || '').toLowerCase();
+        const max = String(r.max || '').toLowerCase();
+        // Valid if at least one value is a number or not N/A
+        return (min !== 'n/a' && min !== '' && min !== '0') ||
+            (max !== 'n/a' && max !== '' && max !== '0');
+    });
+
+    if (validRates.length === 0) {
+        console.log("     🚫 [Mandi Bot] REJECTED: All rates are N/A or invalid.");
+        console.log(`     📊 Received ${aiData.rates.length} rates, but all were N/A.`);
+        return { rejected: true, reason: 'ALL_NA' };
+    }
+
+    console.log(`     ✅ [Mandi Bot] Rate Validation PASSED: ${validRates.length}/${aiData.rates.length} valid rates.`);
 
     const detectedDate = aiData.date || todayYMD;
 
@@ -82,10 +110,10 @@ async function processRawMandiData(rawHeadline, rawBody, sourceUrl, settings, en
     let shareCardUrl = null;
     let imageUrl = null;
 
-    if (aiData.rates && aiData.rates.length > 0) {
-        console.log(`     🎨 [Mandi Bot] Generating Rate Card for ${aiData.rates.length} crops...`);
+    if (validRates.length > 0) {
+        console.log(`     🎨 [Mandi Bot] Generating Rate Card for ${validRates.length} crops...`);
         try {
-            const cardBuffer = await newsCardGen.generateMandiCard(aiData.rates, detectedDate);
+            const cardBuffer = await newsCardGen.generateMandiCard(validRates, detectedDate);
             if (cardBuffer) {
                 shareCardUrl = await imageGen.uploadToImgBB(cardBuffer);
                 imageUrl = shareCardUrl; // Use card as main image too

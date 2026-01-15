@@ -1,6 +1,6 @@
-import { db } from '@/lib/firebase';
 import ArticleGrid from '@/app/components/ArticleGrid';
 import Link from 'next/link';
+import { headers } from 'next/headers';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -9,37 +9,66 @@ export const revalidate = 0;
 const categoryMapping = {
   'schemes': 'सरकारी योजना',
   'mandi-bhav': 'मंडी भाव',
-  'nagaur-news': 'नागौर न्यूज़',
+  'nagaur-news': 'नागौर न्यूज़',
   'bharti-result': 'भर्ती व रिजल्ट',
   'education-dept': 'शिक्षा विभाग'
 };
 
+// Reverse mapping for API (slug -> API category key)
+const apiCategoryMap = {
+  'schemes': 'schemes',
+  'mandi-bhav': 'mandi',
+  'nagaur-news': 'news',
+  'bharti-result': 'jobs',
+  'education-dept': 'education'
+};
+
 async function getCategoryArticles(slug) {
   const hindiCategory = categoryMapping[slug];
+  const apiCategory = apiCategoryMap[slug];
 
-  if (!hindiCategory) return [];
+  console.log(`[Category Page] Slug: "${slug}", Hindi: "${hindiCategory}", API Key: "${apiCategory}"`);
+
+  if (!hindiCategory || !apiCategory) {
+    console.log('[Category Page] ❌ No mapping found for slug');
+    return [];
+  }
 
   try {
-    const snapshot = await db.collection('articles')
-      .where('category', '==', hindiCategory)
-      .where('status', '==', 'published')
-      .orderBy('createdAt', 'desc')
-      .limit(20)
-      .get();
+    // Get host from headers for internal API call
+    const headersList = await headers();
+    const host = headersList.get('host') || 'localhost:3000';
+    const protocol = headersList.get('x-forwarded-proto') || 'http';
 
-    return snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString()) : null,
-        publishedAt: data.publishedAt ? (data.publishedAt.toDate ? data.publishedAt.toDate().toISOString() : new Date(data.publishedAt).toISOString()) : null,
-        updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString()) : null,
-        audioGeneratedAt: data.audioGeneratedAt ? (data.audioGeneratedAt.toDate ? data.audioGeneratedAt.toDate().toISOString() : new Date(data.audioGeneratedAt).toISOString()) : null,
-      };
+    const apiUrl = `${protocol}://${host}/api/latest-news?category=${apiCategory}&perCategory=20`;
+    console.log(`[Category Page] Fetching from API: ${apiUrl}`);
+
+    const response = await fetch(apiUrl, {
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' }
     });
+
+    if (!response.ok) {
+      console.error(`[Category Page] ❌ API returned ${response.status}`);
+      return [];
+    }
+
+    const articles = await response.json();
+    console.log(`[Category Page] ✅ API returned ${articles.length} articles`);
+
+    // Transform API response to match expected format
+    return articles.map(article => ({
+      id: article.url?.split('/').pop() || article.id,
+      headline: article.headline,
+      imageUrl: article.imageUrl,
+      shareCardUrl: article.shareCardUrl,
+      category: article.category,
+      createdAt: article.publishedAt,
+      publishedAt: article.publishedAt,
+    }));
+
   } catch (error) {
-    console.error('Error fetching category articles:', error);
+    console.error('[Category Page] ❌ Error fetching from API:', error.message);
     return [];
   }
 }
