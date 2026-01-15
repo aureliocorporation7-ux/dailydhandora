@@ -12,6 +12,52 @@ const { uploadBuffer } = require('../../lib/cloudinary');
 const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb'; // Default voice
 
 /**
+ * 🛡️ SANITIZE TEXT FOR TTS
+ * Removes HTML, special characters, and problematic symbols
+ */
+function sanitizeForTTS(text) {
+    if (!text) return '';
+
+    let clean = text
+        // Remove all HTML tags
+        .replace(/<[^>]*>/g, ' ')
+        // Remove HTML entities
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, 'और')
+        .replace(/&lt;/g, '')
+        .replace(/&gt;/g, '')
+        .replace(/&quot;/g, '')
+        .replace(/&#\d+;/g, '')
+        // Remove URLs
+        .replace(/https?:\/\/[^\s]+/g, '')
+        // Remove email addresses
+        .replace(/[\w.-]+@[\w.-]+\.\w+/g, '')
+        // Remove special symbols that break TTS
+        .replace(/[<>{}[\]|\\^~`]/g, '')
+        // Remove multiple asterisks (markdown bold)
+        .replace(/\*{2,}/g, '')
+        // Remove hashtags
+        .replace(/#\w+/g, '')
+        // Remove emojis (basic)
+        .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+        .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')
+        .replace(/[\u{1F680}-\u{1F6FF}]/gu, '')
+        .replace(/[\u{2600}-\u{26FF}]/gu, '')
+        .replace(/[\u{2700}-\u{27BF}]/gu, '')
+        // Clean up whitespace
+        .replace(/\s+/g, ' ')
+        .replace(/\n+/g, '. ')
+        .trim();
+
+    // Limit length for TTS (5000 chars max)
+    if (clean.length > 5000) {
+        clean = clean.substring(0, 4950) + '...';
+    }
+
+    return clean;
+}
+
+/**
  * Retrieves all available ElevenLabs API keys from env.
  * Priortizes numbered keys 1-10, then falls back to the main key.
  */
@@ -47,6 +93,14 @@ async function generateAndStoreAudio(text, articleId) {
         console.error("❌ [AudioGen] Missing text or articleId.");
         return null;
     }
+
+    // 🛡️ SANITIZE TEXT BEFORE TTS
+    const cleanText = sanitizeForTTS(text);
+    if (!cleanText || cleanText.length < 10) {
+        console.error("❌ [AudioGen] Text too short after sanitization.");
+        return null;
+    }
+    console.log(`🎙️ [AudioGen] Sanitized text length: ${cleanText.length} chars`);
 
     const apiKeys = getApiKeys();
     if (apiKeys.length === 0) {
@@ -84,7 +138,7 @@ async function generateAndStoreAudio(text, articleId) {
                         'Content-Type': 'application/json',
                     },
                     data: {
-                        text: text.substring(0, 5000), // Safety limit
+                        text: cleanText, // 🛡️ Using sanitized text
                         model_id: "eleven_multilingual_v2",
                         vote_confidence: 0.5
                     },

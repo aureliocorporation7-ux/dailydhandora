@@ -3,6 +3,80 @@
 import { useState, useRef, useEffect } from 'react';
 import { Volume2, Loader2, Square, Pause, Play, ChevronDown } from 'lucide-react';
 
+// =====================================================
+// 🗄️ INDEXEDDB AUDIO CACHE (6 Hour Expiry)
+// Caches TTS audio blobs for instant replay
+// =====================================================
+const DB_NAME = 'DailyDhandoraAudioCache';
+const STORE_NAME = 'audioBlobs';
+const CACHE_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+const openAudioDB = () => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB not available'));
+      return;
+    }
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+      }
+    };
+  });
+};
+
+const getCachedAudio = async (textHash) => {
+  try {
+    const db = await openAudioDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get(textHash);
+      request.onsuccess = () => {
+        const result = request.result;
+        if (result && Date.now() - result.timestamp < CACHE_DURATION_MS) {
+          console.log('🗄️ [Cache] HIT - Using cached audio');
+          resolve(result.blob);
+        } else {
+          if (result) console.log('🗄️ [Cache] EXPIRED - Fetching fresh');
+          resolve(null);
+        }
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+};
+
+const setCachedAudio = async (textHash, blob) => {
+  try {
+    const db = await openAudioDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put({ key: textHash, blob, timestamp: Date.now() });
+    console.log('🗄️ [Cache] STORED - Audio cached for 6 hours');
+  } catch (e) {
+    console.warn('🗄️ [Cache] Store failed:', e.message);
+  }
+};
+
+// Simple hash for text (used as cache key)
+const hashText = (text) => {
+  let hash = 0;
+  for (let i = 0; i < Math.min(text.length, 500); i++) {
+    const char = text.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return 'tts_' + Math.abs(hash).toString(36);
+};
+// =====================================================
+
 export default function AudioPlayer({ text, audioUrl }) {
   const [loading, setLoading] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -107,18 +181,33 @@ export default function AudioPlayer({ text, audioUrl }) {
         console.log("Using pre-generated audio:", audioUrl);
         url = audioUrl;
       } else {
-        // 2. ATTEMPT SERVER-SIDE AI (Edge TTS)
-        const response = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
-        });
+        // 🗄️ CHECK INDEXEDDB CACHE FIRST
+        const textHash = hashText(text);
+        const cachedBlob = await getCachedAudio(textHash);
 
-        if (!response.ok) throw new Error('Server AI Unavailable');
+        if (cachedBlob) {
+          // ⚡ CACHE HIT - Instant playback!
+          url = URL.createObjectURL(cachedBlob);
+          objectUrlRef.current = url;
+        } else {
+          // 📡 CACHE MISS - Fetch from API
+          console.log('🗄️ [Cache] MISS - Fetching from API');
+          const response = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          });
 
-        const blob = await response.blob();
-        url = URL.createObjectURL(blob);
-        objectUrlRef.current = url; // Track for cleanup
+          if (!response.ok) throw new Error('Server AI Unavailable');
+
+          const blob = await response.blob();
+
+          // 💾 Store in cache for next time
+          await setCachedAudio(textHash, blob);
+
+          url = URL.createObjectURL(blob);
+          objectUrlRef.current = url;
+        }
       }
 
       const audio = new Audio(url);

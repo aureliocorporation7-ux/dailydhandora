@@ -48,6 +48,22 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   // disable: process.env.NODE_ENV === 'development',
   workboxOptions: {
     runtimeCaching: [
+      // 🎙️ TTS API Audio Cache (Edge/Google TTS) - 6 hours
+      {
+        urlPattern: /^https?:\/\/.*\/api\/tts/,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'tts-audio-cache',
+          expiration: {
+            maxEntries: 30,
+            maxAgeSeconds: 60 * 60 * 6, // 6 hours
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+        },
+      },
+      // Cloudinary Audio (ElevenLabs permanent) - 30 days
       {
         urlPattern: /^https:\/\/res\.cloudinary\.com\/.*\.mp3$/,
         handler: 'CacheFirst',

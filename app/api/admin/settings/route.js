@@ -11,8 +11,10 @@ export async function GET() {
       const docData = doc.data();
       data = {
         botMode: docData.botMode || 'auto',
-        imageGenEnabled: docData.imageGenEnabled !== false, // Default true if undefined
-        enableAudioGen: docData.enableAudioGen !== false // Default true if undefined
+        imageGenEnabled: docData.imageGenEnabled !== false,
+        enableAudioGen: docData.enableAudioGen !== false,
+        googleAdsId: docData.googleAdsId || '', // Google AdSense Publisher ID
+        googleAdsEnabled: docData.googleAdsEnabled || false
       };
     }
     return NextResponse.json(data);
@@ -40,6 +42,14 @@ export async function POST(request) {
 
     if (typeof body.enableAudioGen !== 'undefined') {
       updateData.enableAudioGen = body.enableAudioGen;
+    }
+
+    // Google Ads settings
+    if (typeof body.googleAdsId !== 'undefined') {
+      updateData.googleAdsId = body.googleAdsId;
+    }
+    if (typeof body.googleAdsEnabled !== 'undefined') {
+      updateData.googleAdsEnabled = body.googleAdsEnabled;
     }
 
     await db.collection('settings').doc('global').set(updateData, { merge: true });

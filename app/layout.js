@@ -3,6 +3,7 @@ import './globals.css';
 import { NotificationProvider } from './contexts/NotificationContext';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
+import GoogleAdsScript from './components/GoogleAdsScript';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -39,6 +40,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className={`${inter.className} bg-neutral-950 text-white`} suppressHydrationWarning>
+        <GoogleAdsScript />
         <NotificationProvider>
           <Navbar />
           <main className="min-h-screen">

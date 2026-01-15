@@ -82,12 +82,26 @@ export default function AnalyticsDashboard() {
                 <nav className="p-4 space-y-2">
                     <Link href="/admin/dashboard" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all">
                         <LayoutDashboard size={20} />
-                        Dashboard
+                        Content
                     </Link>
+
+                    <Link href="/admin/dashboard" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all">
+                        <span className="text-lg">🧠</span>
+                        <span>AI Brain</span>
+                    </Link>
+
                     <Link href="/admin/analytics" className="flex items-center gap-3 px-4 py-3 bg-white/10 rounded-xl text-white font-medium">
                         <BarChart3 size={20} />
                         Analytics
                     </Link>
+
+                    <div className="pt-4 border-t border-white/10 mt-4">
+                        <p className="px-4 text-xs text-slate-500 uppercase tracking-wider mb-3">Quick Info</p>
+                        <div className="px-4 py-2 bg-slate-800/30 rounded-xl text-xs text-slate-400">
+                            <p>📊 View detailed stats</p>
+                            <p className="mt-1">🔥 Top performing articles</p>
+                        </div>
+                    </div>
                 </nav>
 
                 <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">

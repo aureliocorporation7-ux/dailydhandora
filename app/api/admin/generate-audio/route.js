@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateAndStoreAudio } from '@/scripts/services/audio-gen';
+import { db } from '@/lib/firebase';
 
 // POST /api/admin/generate-audio
 export async function POST(req) {
@@ -10,7 +11,18 @@ export async function POST(req) {
             return NextResponse.json({ error: 'Missing articleId or text' }, { status: 400 });
         }
 
-        console.log(`[API] Admin requesting audio for ${articleId}...`);
+        // 🛡️ CHECK IF AUDIO GENERATION IS ENABLED
+        const settingsDoc = await db.collection('settings').doc('global').get();
+        const settings = settingsDoc.exists ? settingsDoc.data() : {};
+
+        if (settings.enableAudioGen === false) {
+            console.log(`[API] ❌ Audio Gen is DISABLED in Admin Settings. Rejecting request.`);
+            return NextResponse.json({
+                error: 'Audio Generation is disabled in Admin Settings. Enable it first!'
+            }, { status: 403 });
+        }
+
+        console.log(`[API] ✅ Audio Gen enabled. Generating for ${articleId}...`);
 
         // Call the service (which handles Cloudinary + Firestore update)
         const audioUrl = await generateAndStoreAudio(text, articleId);

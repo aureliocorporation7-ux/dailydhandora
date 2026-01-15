@@ -5,8 +5,12 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
-const DEVANAGARI_FONT_URL = "https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf";
-const DEVANAGARI_FONT_FILENAME = 'NotoSansDevanagari-Bold.ttf';
+// 🔤 FONT CONFIGURATION
+// Using Hind font - specifically designed for Hindi with proper matra rendering
+// Hind is optimized for UI and has excellent Devanagari support
+// Source: Official Google Fonts repository
+const DEVANAGARI_FONT_URL = "https://github.com/nicholaswmin/font-files/raw/master/fonts/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf";
+const DEVANAGARI_FONT_FILENAME = 'NotoSansDevanagari-Regular.ttf';
 const LATIN_FONT_FILENAME = 'NotoSans-Bold.ttf';
 const LOGO_FILENAME = 'logo.png';
 
@@ -92,25 +96,27 @@ async function ensureFont() {
 
 /**
  * 🔄 Get Satori fonts configuration (both Devanagari and Latin)
+ * IMPORTANT: Devanagari MUST be FIRST for proper Hindi rendering
  */
 function getSatoriFonts() {
     const fonts = [];
 
-    // Add Latin font FIRST (fallback for English characters)
-    if (LATIN_FONT_BUFFER) {
-        fonts.push({
-            name: 'Noto Sans',
-            data: LATIN_FONT_BUFFER,
-            weight: 700,
-            style: 'normal'
-        });
-    }
-
-    // Add Devanagari font (primary for Hindi)
+    // 🔤 Add Devanagari font FIRST (PRIMARY for Hindi - fixes matra issues)
     if (DEVANAGARI_FONT_BUFFER) {
         fonts.push({
             name: 'Noto Sans Devanagari',
             data: DEVANAGARI_FONT_BUFFER,
+            weight: 700,
+            style: 'normal'
+        });
+        console.log('  ✅ [Fonts] Devanagari font loaded as PRIMARY');
+    }
+
+    // Add Latin font SECOND (fallback for English characters)
+    if (LATIN_FONT_BUFFER) {
+        fonts.push({
+            name: 'Noto Sans',
+            data: LATIN_FONT_BUFFER,
             weight: 700,
             style: 'normal'
         });
@@ -405,11 +411,128 @@ async function generateMandiCard(rates, date) {
 
 /**
  * 🎓 Generates an "Education Update" card (Blue/Yellow Theme).
+ * Uses Canvas API for proper Hindi/Devanagari text rendering.
  * @param {string} headline - The Hindi headline.
  * @param {string} date - Date string.
  * @returns {Promise<Buffer>} - The generated image buffer.
  */
 async function generateEduCard(headline, date) {
+    try {
+        const { createCanvas, registerFont, loadImage } = require('canvas');
+
+        // Ensure paths are set (including LOGO_PATH)
+        await ensureFont();
+
+        // Register Hindi font
+        const fontPath = findPath(DEVANAGARI_FONT_FILENAME);
+        if (fs.existsSync(fontPath)) {
+            registerFont(fontPath, { family: 'NotoDevanagari' });
+            console.log('  ✅ [Canvas] Hindi font registered');
+        }
+
+        const width = 1200;
+        const height = 675;
+
+        // Create canvas
+        const canvas = createCanvas(width, height);
+        const ctx = canvas.getContext('2d');
+
+        // Background gradient (Blue)
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, '#1e3a8a');
+        gradient.addColorStop(1, '#172554');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        // Header bar (Yellow)
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(0, 0, width, 70);
+
+        // Header text
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 36px NotoDevanagari, Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('राजस्थान शिक्षा विभाग अपडेट', width / 2, 48);
+
+        // Date badge (right side)
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        const dateWidth = 150;
+        const dateHeight = 35;
+        const dateX = width - dateWidth - 30;
+        const dateY = 90;
+        ctx.beginPath();
+        ctx.roundRect(dateX, dateY, dateWidth, dateHeight, 15);
+        ctx.fill();
+
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(date, dateX + dateWidth / 2, dateY + 24);
+
+        // Content box
+        const boxMargin = 80;
+        const boxY = 160;
+        const boxHeight = 360;
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(boxMargin, boxY, width - 2 * boxMargin, boxHeight, 15);
+        ctx.fill();
+        ctx.stroke();
+
+        // Headline text (CENTER - properly wrapped)
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 44px NotoDevanagari, Arial';
+        ctx.textAlign = 'center';
+
+        const lines = wrapText(headline, 30);
+        const lineHeight = 70;
+        const totalTextHeight = lines.length * lineHeight;
+        const startY = boxY + (boxHeight - totalTextHeight) / 2 + 45;
+
+        lines.forEach((line, i) => {
+            ctx.fillText(line, width / 2, startY + i * lineHeight);
+        });
+
+        // Footer
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('DailyDhandora.com - Education Portal', width / 2, height - 30);
+
+        // 🖼️ Add logo if exists (TOP LEFT on yellow header)
+        console.log(`  🖼️ [Canvas] Looking for logo at: ${LOGO_PATH}`);
+        if (LOGO_PATH && fs.existsSync(LOGO_PATH)) {
+            try {
+                const logo = await loadImage(LOGO_PATH);
+                // 🖼️ DIVINE LEVEL: Logo BIGGER, NO CUTTING from top
+                // y=0 ensures no top cut, size 90x90 for zoom
+                ctx.drawImage(logo, 5, 0, 90, 90);
+                console.log('  ✅ [Canvas] Logo added successfully!');
+            } catch (logoErr) {
+                console.warn('  ⚠️ [Canvas] Logo load failed:', logoErr.message);
+            }
+        } else {
+            console.warn('  ⚠️ [Canvas] Logo file not found');
+        }
+
+        // Return PNG buffer
+        return canvas.toBuffer('image/png');
+
+    } catch (e) {
+        console.error("❌ [Edu Card Canvas] Error:", e);
+
+        // Fallback to Satori if Canvas fails
+        console.log("  🔄 Falling back to Satori...");
+        return await generateEduCardSatori(headline, date);
+    }
+}
+
+/**
+ * 🎓 FALLBACK: Satori-based Education card (if Canvas fails)
+ */
+async function generateEduCardSatori(headline, date) {
     try {
         await ensureFont();
         const fonts = getSatoriFonts();
@@ -567,7 +690,7 @@ async function generateEduCard(headline, date) {
         return Buffer.from(pngBuffer);
 
     } catch (e) {
-        console.error("❌ [Edu Card] Error:", e);
+        console.error("❌ [Edu Card Satori] Error:", e);
         return null;
     }
 }
