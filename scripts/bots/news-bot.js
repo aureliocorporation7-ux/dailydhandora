@@ -383,20 +383,43 @@ async function fetchPatrikaNews(settings) {
 // 3. COMMON PROCESSING (AI + DB)
 // ========================================== 
 async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, settings) {
-    // 🧠 DYNAMIC PROMPT (Hybrid: DB > Code)
+    // 🧠 DYNAMIC PROMPT (Hybrid: DB > Code) with AI Category Verification
     const DEFAULT_USER_PROMPT = `
-    ROLE: Senior Editor for DailyDhandora.
+    ROLE: Senior Editor for DailyDhandora (Nagaur's trusted news portal).
+    
     SOURCE:
     Headline: {{headline}}
     Raw Text: {{body}}
     Source: {{sourceName}}
-    TASK: Write Hindi news report.
+    
+    TASK: Write Hindi news report AND classify into correct category.
+    
     GUIDELINES:
-    1. Headline: Click-worthy, <15 words.
-    2. Content: 500 words, HTML (<ul>, <li>).
-    3. Rules: No rivals (Bhaskar/Patrika). Use "हमारे [Tehsil] संवाददाता".
-    OUTPUT: JSON { "headline": "...", "content": "..." }
+    1. **Headline**: Click-worthy, <15 words, Hindi.
+    2. **Content**: 300-500 words, HTML (<p>, <ul>, <li>, <h3>).
+    3. **Rules**: No rival mentions (Bhaskar/Patrika). Use "हमारे [Tehsil] संवाददाता".
+    
+    4. **Category**: Pick EXACTLY one from this table:
+    
+    | Category | Use When (Examples) |
+    |----------|---------------------|
+    | "मंडी भाव" | Crop rates, Mandi prices (Sarso, Moong, Chana, Gehu prices) |
+    | "नागौर न्यूज़" | Local news, Accidents, Events, Crime, Weather, Politics |
+    | "शिक्षा विभाग" | Teachers: Transfer, Salary, DA, Promotion, Seniority |
+    | "सरकारी योजना" | Government schemes, Subsidies, Benefits, Welfare |
+    | "भर्ती व रिजल्ट" | Jobs: Vacancy, Result, Admit Card, Exam, Recruitment |
+    
+    ⚠️ IMPORTANT: Use EXACT Hindi category name from table. No variations!
+    
+    OUTPUT FORMAT (JSON only):
+    {
+      "headline": "Hindi headline here",
+      "content": "<p>...</p>",
+      "tags": ["Nagaur", "Rajasthan"],
+      "category": "मंडी भाव"
+    }
     `;
+
 
     const rawPrompt = await getPrompt('PROMPT_USER_NEWS', DEFAULT_USER_PROMPT);
     const promptContent = fillTemplate(rawPrompt, {
@@ -415,10 +438,68 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
     const cleanHeadline = sanitizeContent(aiData.headline);
     const cleanContent = sanitizeContent(aiData.content);
 
+    // 🏷️ AI CATEGORY VERIFICATION (Dual-Layer)
+    const VALID_CATEGORIES = ['मंडी भाव', 'नागौर न्यूज़', 'शिक्षा विभाग', 'सरकारी योजना', 'भर्ती व रिजल्ट'];
+
+    function normalizeCategory(cat) {
+        if (!cat) return null;
+        const lower = cat.toLowerCase();
+
+        // Mandi variations
+        if (lower.includes('मंडी') || lower.includes('mandi') || lower.includes('भाव') || lower.includes('rate') || lower.includes('crop'))
+            return 'मंडी भाव';
+        // Recruitment variations
+        if (lower.includes('भर्ती') || lower.includes('रिजल्ट') || lower.includes('exam') || lower.includes('vacancy') || lower.includes('result'))
+            return 'भर्ती व रिजल्ट';
+        // Education variations
+        if (lower.includes('शिक्षा') || lower.includes('विभाग') || lower.includes('education') || lower.includes('teacher'))
+            return 'शिक्षा विभाग';
+        // Scheme variations
+        if (lower.includes('योजना') || lower.includes('scheme') || lower.includes('subsidy') || lower.includes('welfare'))
+            return 'सरकारी योजना';
+        // Local news
+        if (lower.includes('नागौर') || lower.includes('nagaur') || lower.includes('local') || lower.includes('news'))
+            return 'नागौर न्यूज़';
+
+        if (VALID_CATEGORIES.includes(cat)) return cat;
+        return null;
+    }
+
+    // Code-level keyword detection (fallback)
+    const contentCheck = `${rawHeadline} ${rawBody}`.toLowerCase();
+    const mandiKeywords = ['मंडी', 'mandi', 'भाव', 'rate', 'क्विंटल', 'quintal', 'सरसों', 'मूंग', 'गेहूं', 'चना', 'sarso', 'moong', 'crop price'];
+    const recruitKeywords = ['भर्ती', 'vacancy', 'result', 'परीक्षा', 'exam', 'admit card', 'answer key', 'reet', 'rpsc'];
+    const eduKeywords = ['transfer', 'तबादला', 'salary', 'वेतन', 'seniority', 'वरिष्ठता', 'promotion', 'पदोन्नति'];
+    const schemeKeywords = ['योजना', 'scheme', 'subsidy', 'benefit', 'welfare', 'आवेदन'];
+
+    let codeCategory = 'नागौर न्यूज़'; // Default
+    if (mandiKeywords.some(kw => contentCheck.includes(kw))) codeCategory = 'मंडी भाव';
+    else if (recruitKeywords.some(kw => contentCheck.includes(kw))) codeCategory = 'भर्ती व रिजल्ट';
+    else if (eduKeywords.some(kw => contentCheck.includes(kw))) codeCategory = 'शिक्षा विभाग';
+    else if (schemeKeywords.some(kw => contentCheck.includes(kw))) codeCategory = 'सरकारी योजना';
+
+    // AI Category (primary) with normalization
+    const aiCategory = normalizeCategory(aiData.category);
+
+    // Final Category: AI > Code
+    let verifiedCategory;
+    if (aiCategory) {
+        verifiedCategory = aiCategory;
+        if (aiCategory === codeCategory) {
+            console.log(`     ✅ [News Bot] Category VERIFIED: ${verifiedCategory}`);
+        } else {
+            console.log(`     🔄 [News Bot] Category: ${verifiedCategory} (AI) | Code: ${codeCategory}`);
+        }
+    } else {
+        verifiedCategory = codeCategory;
+        console.log(`     🏷️ [News Bot] Category (fallback): ${verifiedCategory}`);
+    }
+
+
     // 🔄 SMART IMAGE FALLBACK SYSTEM
     // Priority: AI Generated → Stock Image → Card (for WhatsApp essentials)
     const imageResult = await imageGen.getImageWithFallback(
-        'नागौर न्यूज़',
+        verifiedCategory, // Use verified category for image selection
         cleanHeadline,
         aiData.image_prompt,
         settings
@@ -453,7 +534,7 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/^\* (.*$)/gim, '<li>$1</li>'),
         tags: [...(aiData.tags || []), 'Nagaur', 'Rajasthan News'],
-        category: 'नागौर न्यूज़',
+        category: verifiedCategory, // VERIFIED by AI + Code
         sourceUrl: sourceUrl,
         imageUrl: imageUrl,
         imageType: imageType, // NEW: Store image type for UI logic
@@ -514,3 +595,14 @@ async function run() {
 }
 
 module.exports = { run };
+
+// Standalone execution - Run if called directly
+if (require.main === module) {
+    run().then(() => {
+        console.log('📰 [News Bot] Standalone execution complete.');
+        process.exit(0);
+    }).catch(err => {
+        console.error('❌ [News Bot] Error:', err.message);
+        process.exit(1);
+    });
+}

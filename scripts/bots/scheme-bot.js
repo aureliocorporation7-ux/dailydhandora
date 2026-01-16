@@ -66,18 +66,19 @@ async function run() {
                 continue;
             }
 
-            // 3. Smart Categorization
-            let category = 'सरकारी योजना';
-            const eduKeywords = ['Scholarship', 'Chatravriti', 'Scooty', 'Coaching', 'Berojgari', 'Anuprati', 'छात्रवृत्ति', 'स्कूटी', 'कोचिंग', 'बेरोजगारी', 'अनुप्रति'];
-            
-            if (eduKeywords.some(kw => rawTitle.toLowerCase().includes(kw.toLowerCase()))) {
-                category = 'भर्ती व रिजल्ट'; // Using 'Education/Jobs' equivalent
-            }
-            console.log(`     🏷️ [Scheme Bot] Category assigned: ${category}`);
+            // 3. Smart Categorization (Dual-Layer: AI + Code)
+            const VALID_SCHEME_CATEGORIES = ['सरकारी योजना', 'भर्ती व रिजल्ट'];
+
+            // Code-level keyword detection (immediate)
+            const recruitKeywords = ['Scholarship', 'Chatravriti', 'Scooty', 'Coaching', 'Berojgari', 'Anuprati', 'छात्रवृत्ति', 'स्कूटी', 'कोचिंग', 'बेरोजगारी', 'अनुप्रति', 'Vacancy', 'भर्ती', 'Exam', 'रोजगार'];
+            const codeCategory = recruitKeywords.some(kw => rawTitle.toLowerCase().includes(kw.toLowerCase()))
+                ? 'भर्ती व रिजल्ट'
+                : 'सरकारी योजना';
 
             // 4. Hybrid Content
             let finalContent = "";
             let finalHeadline = rawTitle;
+            let aiCategory = null;
 
             console.log(`     🤖 [Scheme Bot] AI Status: ${settings.enableAI ? 'ON' : 'OFF'}`);
 
@@ -89,16 +90,30 @@ async function run() {
                 Description: ${rawDesc}
 
                 TASK:
-                Format the provided "Description" into clean, readable HTML.
+                Format the provided "Description" into clean, readable HTML AND classify into category.
+                
+                FORMAT RULES:
                 - Use <ul><li> for lists if applicable.
                 - Use <p> for paragraphs.
                 - Keep it simple and direct.
+                
+                CATEGORY: Pick EXACTLY one:
+                | Category | Use When |
+                |----------|----------|
+                | "सरकारी योजना" | Welfare schemes, Subsidies, Benefits, Pension |
+                | "भर्ती व रिजल्ट" | Scholarships, Job-related, Coaching, Berojgari, Scooty |
                 
                 CRITICAL RULES:
                 - DO NOT add any new information.
                 - DO NOT hallucinate facts not present in the source.
                 - ONLY format what is given.
-                - Return JSON format with 'headline' (same as source) and 'content' (formatted HTML).
+                
+                OUTPUT FORMAT (JSON):
+                {
+                  "headline": "Same as source title",
+                  "content": "<p>Formatted HTML...</p>",
+                  "category": "सरकारी योजना"
+                }
                 `;
 
                 const aiData = await aiWriter.writeArticle(prompt);
@@ -106,6 +121,11 @@ async function run() {
                 if (aiData && aiData.content) {
                     console.log("     ✅ [Scheme Bot] AI Rewrite Successful.");
                     finalContent = aiData.content;
+
+                    // Validate AI category
+                    if (aiData.category && VALID_SCHEME_CATEGORIES.includes(aiData.category)) {
+                        aiCategory = aiData.category;
+                    }
                 } else {
                     console.log("     ⚠️ [Scheme Bot] AI Failed. Using Raw Fallback.");
                     finalContent = `<p>${rawDesc}</p>`;
@@ -114,6 +134,17 @@ async function run() {
                 console.log("     ℹ️ [Scheme Bot] Using Raw Description (AI Disabled).");
                 finalContent = `<p>${rawDesc}</p>`;
             }
+
+            // Final Category: AI > Code
+            const category = aiCategory || codeCategory;
+            if (aiCategory && aiCategory === codeCategory) {
+                console.log(`     ✅ [Scheme Bot] Category VERIFIED: ${category}`);
+            } else if (aiCategory) {
+                console.log(`     🔄 [Scheme Bot] Category: ${category} (AI) | Code: ${codeCategory}`);
+            } else {
+                console.log(`     🏷️ [Scheme Bot] Category (fallback): ${category}`);
+            }
+
 
             // 5. Append CTA
             const ctaHtml = `<br><div style="margin-top: 20px;">
@@ -136,7 +167,7 @@ async function run() {
             const docId = `scheme-${slug}`;
             console.log(`     💾 [Scheme Bot] Saving to Firestore...`);
             await dbService.saveDocument('articles', schemeData, docId);
-            
+
             console.log(`     🎉 [Scheme Bot] SUCCESS! Saved: "${finalHeadline}"`);
             savedCount++;
 

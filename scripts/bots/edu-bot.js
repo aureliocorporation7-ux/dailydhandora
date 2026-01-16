@@ -4,6 +4,7 @@ const aiWriter = require('../services/ai-writer');
 const imageGen = require('../services/image-gen');
 const newsCardGen = require('../services/news-card-gen');
 const dbService = require('../services/db-service');
+const topicCache = require('../services/topic-cache');
 const { getCategoryFallback } = require('../../lib/stockImages');
 const { isFresh, getISTDate } = require('../../lib/dateUtils');
 
@@ -104,6 +105,21 @@ async function run() {
         'sikar', 'सीकर', 'churu', 'चूरू', 'jhunjhunu', 'झुंझुनूं',
         'sriganganagar', 'श्रीगंगानगर', 'hanumangarh', 'हनुमानगढ़',
         'banswara', 'बांसवाड़ा', 'dungarpur', 'डूंगरपुर', 'pratapgarh', 'प्रतापगढ़'
+    ];
+
+    // 🚫 GEOGRAPHIC NEGATIVE FILTER - Reject non-Rajasthan states (TASK 2.1)
+    const geoBlacklistStates = [
+        'punjab', 'पंजाब', 'bihar', 'बिहार', 'uttar pradesh', 'उत्तर प्रदेश', 'up ',
+        'delhi', 'दिल्ली', 'haryana', 'हरियाणा', 'madhya pradesh', 'मध्य प्रदेश', 'mp ',
+        'gujarat', 'गुजरात', 'maharashtra', 'महाराष्ट्र'
+    ];
+
+    // 🏷️ CATEGORY SPLIT KEYWORDS - Move to "Recruitment & Results" (TASK 2.2)
+    const recruitmentKeywords = [
+        'result', 'रिजल्ट', 'परिणाम', 'admit card', 'एडमिट कार्ड', 'प्रवेश पत्र',
+        'answer key', 'उत्तर कुंजी', 'आंसर की', 'vacancy', 'वैकेंसी', 'रिक्ति',
+        'bharti', 'भर्ती', 'recruitment', 'नियुक्ति', 'jobs', 'नौकरी',
+        'cut off', 'कट ऑफ', 'merit list', 'मेरिट लिस्ट'
     ];
 
     // ✅ EDUCATION WHITELIST - Overrides blacklisted location (if news is truly edu-related)
@@ -223,8 +239,31 @@ async function run() {
                     // ✅ STEP 3: RAJASTHAN FOCUS CHECK
                     const isRajasthan = rajasthanKeywords.some(k => contentCheck.includes(k));
 
+                    // 🚫 STEP 3.5: GEOGRAPHIC NEGATIVE FILTER (TASK 2.1)
+                    // Reject if mentions other states WITHOUT mentioning Rajasthan
+                    const hasOtherState = geoBlacklistStates.some(state => contentCheck.includes(state));
+                    if (hasOtherState && !isRajasthan) {
+                        const matchedState = geoBlacklistStates.find(s => contentCheck.includes(s));
+                        console.log(`     🚫 [Edu Bot] GEO-REJECT: Found "${matchedState}" without Rajasthan context.`);
+                        continue;
+                    }
+
+                    // 🔍 STEP 3.6: TOPIC CACHE CHECK (Duplicate Prevention - TASK 3)
+                    const { isDuplicate, originalSource } = await topicCache.checkRecentTopic(article.headline, 'edu-bot', 4);
+                    if (isDuplicate) {
+                        console.log(`     ⏭️ [Edu Bot] DUPLICATE: Already posted by ${originalSource}. Skipping.`);
+                        continue;
+                    }
+
+                    // 🏷️ STEP 3.7: CATEGORY SPLIT LOGIC (TASK 2.2)
+                    const isRecruitmentNews = recruitmentKeywords.some(k => contentCheck.includes(k));
+                    const targetCategory = isRecruitmentNews ? 'भर्ती व रिजल्ट' : 'शिक्षा विभाग';
+                    if (isRecruitmentNews) {
+                        console.log(`     🏷️ [Edu Bot] Category SPLIT: Moving to "भर्ती व रिजल्ट" (Recruitment)`);
+                    }
+
                     if (isRajasthan) {
-                        const success = await processEduData(article.headline, article.body, link, settings);
+                        const success = await processEduData(article.headline, article.body, link, settings, targetCategory);
                         if (success) processedCount++;
                     } else {
                         console.log("     ⚠️ [Edu Bot] Rejected: Content not explicitly Rajasthan focused.");
@@ -248,9 +287,10 @@ async function run() {
 
 /**
  * 🎓 Process Education News
+ * @param {string} targetCategory - Dynamic category (Education or Recruitment)
  */
-async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
-    console.log(`\n  🎓 [Edu Bot] Processing Education Order...`);
+async function processEduData(rawHeadline, rawBody, sourceUrl, settings, targetCategory = 'शिक्षा विभाग') {
+    console.log(`\n  🎓 [Edu Bot] Processing for category: ${targetCategory}...`);
 
     const now = new Date();
     const todayYMD = now.toISOString().split('T')[0];
@@ -272,17 +312,19 @@ async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
     1. Decode this news/order into a clear, viral update.
     2. Focus on: "What does this mean for me?" (e.g., School holiday? Exam date? Transfer list?).
     3. Use official terms: 'Bikaner Nideshalaya', 'Jaipur Sachivalaya', 'RPSC Ajmer'.
-    3. Use official terms: 'Bikaner Nideshalaya', 'Jaipur Sachivalaya', 'RPSC Ajmer'.
     4. If 'Nagaur' is mentioned with a Tehsil (e.g., Merta/Jayal), use "हमारे **[Tehsil]** संवाददाता" in the body.
     5. **Sign-Off:** Start with Tehsil Match (Degana, Merta, etc.). Fallback to "हमारे नागौर संवाददाता". NEVER use village names.
+
+    6. **CATEGORY**: Classify into EXACTLY one:
+       - "भर्ती व रिजल्ट" : If about Hiring, Exam, Result, Answer Key, Vacancy, REET, RPSC.
+       - "शिक्षा विभाग" : If about Transfer, Salary, Holiday, School Timing, Promotion, DA.
     
     OUTPUT JSON FORMAT:
     {
       "headline": "Rajasthan Education Update: [Punchy Title]", 
       "content": "HTML body with <ul><li> for key points. Use <h3> for subheads.",
       "tags": ["Rajasthan Education", "Shala Darpan", "Teachers"],
-      "isUrgent": false,
-      "date": "${todayYMD}" 
+      "category": "शिक्षा विभाग"
     }
     `;
 
@@ -292,10 +334,41 @@ async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
         return false;
     }
 
+    // 🏷️ AI CATEGORY VERIFICATION (Dual-Layer)
+    // Layer 1: AI Category (Primary)
+    // Layer 2: Code/Target Category (Fallback/Verification)
+
+    function normalizeCategory(cat) {
+        if (!cat) return null;
+        const lower = cat.toLowerCase();
+        if (lower.includes('भर्ती') || lower.includes('रिजल्ट') || lower.includes('exam') || lower.includes('vacancy') || lower.includes('recruitment'))
+            return 'भर्ती व रिजल्ट';
+        if (lower.includes('शिक्षा') || lower.includes('विभाग') || lower.includes('education') || lower.includes('teacher') || lower.includes('school'))
+            return 'शिक्षा विभाग';
+        return null;
+    }
+
+    const aiCategory = normalizeCategory(aiData.category);
+    let verifiedCategory = targetCategory; // Default to code-suggested
+
+    if (aiCategory) {
+        verifiedCategory = aiCategory;
+        if (aiCategory !== targetCategory) {
+            console.log(`     🔄 [Edu Bot] Category Correction: ${targetCategory} (Code) → ${verifiedCategory} (AI)`);
+        } else {
+            console.log(`     ✅ [Edu Bot] Category Verified: ${verifiedCategory}`);
+        }
+    } else {
+        console.log(`     🏷️ [Edu Bot] Category (Fallback): ${verifiedCategory}`);
+    }
+
+    // 📝 LOG TO TOPIC CACHE (TASK 3 - Cross-bot duplicate prevention)
+    await topicCache.logTopic(aiData.headline, 'edu-bot');
+
     // 🔄 SMART IMAGE FALLBACK SYSTEM
     // For Education: Skip AI Gen, prioritize Card (WhatsApp essential)
     const imageResult = await imageGen.getImageWithFallback(
-        'शिक्षा विभाग',
+        verifiedCategory,
         aiData.headline,
         null,  // No AI image for edu - cards are preferred
         { enableImageGen: false, enableAI: false } // Force stock/card flow
@@ -306,6 +379,7 @@ async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
     const shareCardUrl = imageResult.type === 'card' ? imageUrl : null;
 
     // If not already a card, try to generate one for WhatsApp
+    // Edu Card logic remains same
     let finalShareCardUrl = shareCardUrl;
     if (!shareCardUrl) {
         try {
@@ -325,12 +399,13 @@ async function processEduData(rawHeadline, rawBody, sourceUrl, settings) {
         console.log("     ℹ️ [Edu Bot] Card already generated via fallback system");
     }
 
-    // 3. SAVE
+    // 3. SAVE (Using verified category)
     const articleData = {
         headline: aiData.headline,
         content: aiData.content,
         tags: [...(aiData.tags || []), 'Education', 'Shiksha Vibhag'],
-        category: 'शिक्षा विभाग',
+        category: verifiedCategory, // VERIFIED CATEGORY
+
         sourceUrl: sourceUrl,
         imageUrl: finalShareCardUrl || imageUrl, // Prefer card as main image
         imageType: finalShareCardUrl ? 'card' : imageType, // NEW: Store image type
