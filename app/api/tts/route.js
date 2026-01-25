@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { WebSocket } from 'ws';
 import crypto from 'crypto';
 import * as googleTTS from 'google-tts-api';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+import { db, admin } from '@/lib/firebase';
+import { uploadBuffer } from '@/lib/cloudinary';
 
 // ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║  🚨🚨🚨 DO NOT MODIFY THIS SECTION - EDGE TTS IMPLEMENTATION 🚨🚨🚨          ║
@@ -188,17 +192,90 @@ const splitTextIntoChunks = (str, maxLength) => {
         }
     }
     if (currentChunk) chunks.push(currentChunk);
+    if (currentChunk) chunks.push(currentChunk);
     return chunks;
 };
+
+/**
+ * Adds a valid WAV header to raw PCM data.
+ * Defaults: 24kHz, 1 Channel, 16-bit
+ */
+function addWavHeader(samples, sampleRate = 24000, numChannels = 1, bitDepth = 16) {
+    const byteRate = (sampleRate * numChannels * bitDepth) / 8;
+    const blockAlign = (numChannels * bitDepth) / 8;
+    const dataSize = samples.length;
+    const chunkSize = 36 + dataSize;
+
+    const buffer = Buffer.alloc(44);
+
+    // RIFF chunk descriptor
+    buffer.write('RIFF', 0);
+    buffer.writeUInt32LE(chunkSize, 4);
+    buffer.write('WAVE', 8);
+
+    // fmt sub-chunk
+    buffer.write('fmt ', 12);
+    buffer.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
+    buffer.writeUInt16LE(1, 20); // AudioFormat (1 for PCM)
+    buffer.writeUInt16LE(numChannels, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(byteRate, 28);
+    buffer.writeUInt16LE(blockAlign, 32);
+    buffer.writeUInt16LE(bitDepth, 34);
+
+    // data sub-chunk
+    buffer.write('data', 36);
+    buffer.writeUInt32LE(dataSize, 40);
+
+    return Buffer.concat([buffer, samples]);
+}
+
 
 
 export async function POST(request) {
     try {
-        const { text } = await request.json();
+        const { text, articleId } = await request.json(); // Accept articleId
 
         if (!text) {
             return NextResponse.json({ error: 'Text is required' }, { status: 400 });
         }
+
+        // 🛡️ 1. CACHE CHECK: If Audio Exists in DB, Serve Cloudinary URL
+        // ------------------------------------------------------------------
+        // To save bandwidth, we will fetch the URL and redirect or stream it.
+        // For simple playback, frontend can also just use the URL if we expose it.
+        // But here we return binary for consistency with existing implementation.
+        let existingAudioUrl = null;
+        if (articleId) {
+            try {
+                const docRef = db.collection('articles').doc(articleId);
+                const doc = await docRef.get();
+                if (doc.exists && doc.data().audioUrl) {
+                    console.log(`[TTS API] ♻️ Cache Hit! Serving saved audio for ${articleId}`);
+                    // Fetch the audio from Cloudinary to return as buffer (or redirect)
+                    // Redirect is faster/cheaper for server:
+                    return NextResponse.redirect(doc.data().audioUrl);
+                }
+            } catch (cacheErr) {
+                console.warn(`[TTS API] Cache check failed: ${cacheErr.message}`);
+            }
+        }
+
+
+        // 🛡️ PERMISSION CHECK: Verify Admin Toggle
+        // ------------------------------------------------------------------
+        let usePaidApis = true;
+        try {
+            const settingsDoc = await db.collection('settings').doc('global').get();
+            const settings = settingsDoc.exists ? settingsDoc.data() : {};
+            if (settings.enableAudioGen === false) {
+                console.log(`[TTS API] 🚫 Admin disabled Audio Gen. SKIPPING paid APIs (Gemini/ElevenLabs). Falling back to Free Tier.`);
+                usePaidApis = false;
+            }
+        } catch (dbErr) {
+            console.warn(`[TTS API] ⚠️ Settings check failed, defaulting to enabled: ${dbErr.message}`);
+        }
+        // ------------------------------------------------------------------
 
         // 🛡️ COMPREHENSIVE TEXT SANITIZATION FOR TTS
         const cleanText = text
@@ -235,51 +312,101 @@ export async function POST(request) {
         console.log(`🎙️ [TTS API] Sanitized text length: ${cleanText.length} chars`);
         let buffer = null;
 
-        // 1. 🌟 PRIORITY: ELEVENLABS
-        const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
-        const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "56AoDkrOh6qfVPDXZ7Pt";
 
-        if (ELEVEN_KEY) {
+
+        // 0. 💎 PRIORITY: GEMINI NATIVE AUDIO (Flash Preview)
+        // -----------------------------------------------------
+        const AUDIO_API_KEY = process.env.AUDIO_API;
+        if (usePaidApis && AUDIO_API_KEY) {
             try {
-                // Chunk size of 2000 is safe
-                const chunks = splitTextIntoChunks(cleanText, 2000);
-                const audioBuffers = [];
+                const genAI = new GoogleGenerativeAI(AUDIO_API_KEY);
+                const model = genAI.getGenerativeModel({
+                    model: 'models/gemini-2.5-flash-preview-tts',
+                    apiVersion: 'v1alpha'
+                });
 
-                for (const chunk of chunks) {
-                    if (!chunk.trim()) continue;
-                    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'audio/mpeg',
-                            'Content-Type': 'application/json',
-                            'xi-api-key': ELEVEN_KEY
-                        },
-                        body: JSON.stringify({
-                            text: chunk,
-                            model_id: "eleven_multilingual_v2",
-                            voice_settings: { stability: 0.5, similarity_boost: 0.75 }
-                        })
-                    });
+                console.log('🎙️ [TTS API] Attempting Gemini Native Audio...');
 
-                    if (response.ok) {
-                        const audioBlob = await response.blob();
-                        const arrayBuffer = await audioBlob.arrayBuffer();
-                        audioBuffers.push(Buffer.from(arrayBuffer));
+                // For frontend TTS, we process the whole text (Gemini can handle reasonable length)
+                // If text is extremely long, we might need chunking, but Flash model context is large.
+                // Assuming standard news article length (< 5000 chars) fits.
+
+                const result = await model.generateContent({
+                    contents: [{ role: 'user', parts: [{ text: cleanText }] }],
+                    generationConfig: { responseModalities: ["AUDIO"] }
+                });
+
+                const response = result.response;
+                if (response.candidates && response.candidates[0].content.parts[0].inlineData) {
+                    const part = response.candidates[0].content.parts[0];
+                    const audioData = part.inlineData.data;
+                    const mimeType = part.inlineData.mimeType || 'audio/wav';
+
+                    let rawBuffer = Buffer.from(audioData, 'base64');
+
+                    if (mimeType.includes('pcm') || mimeType.includes('L16')) {
+                        // Gemini returns raw PCM, we must headers for browser playback
+                        buffer = addWavHeader(rawBuffer, 24000, 1, 16);
+                        console.log(`✅ TTS: Success with Gemini Native (${buffer.length} bytes)`);
                     } else {
-                        // Fail silently to next provider
-                        throw new Error("ElevenLabs chunk failed");
+                        buffer = rawBuffer;
+                        console.log(`✅ TTS: Success with Gemini Native (Direct Format)`);
                     }
                 }
-
-                if (audioBuffers.length > 0) {
-                    buffer = Buffer.concat(audioBuffers);
-                    console.log(`✅ TTS: Success with ElevenLabs`);
-                }
-
-            } catch (error) {
-                console.warn(`⚠️ ElevenLabs Error: ${error.message}`);
-                buffer = null;
+            } catch (geminiError) {
+                console.warn(`⚠️ Gemini TTS Failed: ${geminiError.message}. Falling back...`);
+                // Buffer remains null, will seamlessly fall through to next method
             }
+        }
+
+        // 1. 🌟 PRIORITY: ELEVENLABS (Fallback)
+        if (!buffer) {
+            const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
+            const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "56AoDkrOh6qfVPDXZ7Pt";
+
+            if (usePaidApis && ELEVEN_KEY) {
+                try {
+                    // Chunk size of 2000 is safe
+                    const chunks = splitTextIntoChunks(cleanText, 2000);
+                    const audioBuffers = [];
+
+                    for (const chunk of chunks) {
+                        if (!chunk.trim()) continue;
+                        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'audio/mpeg',
+                                'Content-Type': 'application/json',
+                                'xi-api-key': ELEVEN_KEY
+                            },
+                            body: JSON.stringify({
+                                text: chunk,
+                                model_id: "eleven_multilingual_v2",
+                                voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+                            })
+                        });
+
+                        if (response.ok) {
+                            const audioBlob = await response.blob();
+                            const arrayBuffer = await audioBlob.arrayBuffer();
+                            audioBuffers.push(Buffer.from(arrayBuffer));
+                        } else {
+                            // Fail silently to next provider
+                            throw new Error("ElevenLabs chunk failed");
+                        }
+                    }
+
+                    if (audioBuffers.length > 0) {
+                        buffer = Buffer.concat(audioBuffers);
+                        console.log(`✅ TTS: Success with ElevenLabs`);
+                    }
+
+                } catch (error) {
+                    console.warn(`⚠️ ElevenLabs Error: ${error.message}`);
+                    buffer = null;
+                }
+            }
+
         }
 
         // 2. 🚀 FALLBACK: MICROSOFT EDGE TTS
@@ -345,6 +472,27 @@ export async function POST(request) {
 
         if (!buffer) {
             throw new Error("All Server TTS services failed.");
+        }
+
+        // 🛡️ 3. SAVE TO CLOUDINARY & DB (Only if Paid API was used or just always for consistency)
+        // Ideally, we only save high-quality audio. Everyone gets saved to avoid re-generation.
+        if (articleId && buffer) {
+            // We do this asynchronously to not block the response speed
+            (async () => {
+                try {
+                    console.log(`[TTS API] 💾 Uploading audio cache for ${articleId}...`);
+                    const cloudUrl = await uploadBuffer(buffer, 'news_audio');
+                    if (cloudUrl) {
+                        await db.collection('articles').doc(articleId).update({
+                            audioUrl: cloudUrl,
+                            audioGeneratedAt: admin.firestore.FieldValue.serverTimestamp()
+                        });
+                        console.log(`[TTS API] ✅ Audio Cached Successfully: ${cloudUrl}`);
+                    }
+                } catch (uploadErr) {
+                    console.error(`[TTS API] ⚠️ Cache Upload Failed: ${uploadErr.message}`);
+                }
+            })();
         }
 
         // 🚀 BROWSER CACHING: Cache audio for 6 hours (21600 seconds)

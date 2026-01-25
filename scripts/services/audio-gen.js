@@ -5,6 +5,7 @@ if (process.env.CI) {
 }
 
 const axios = require('axios');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 // ✅ SAFE IMPORT: Use the existing initialized Firebase instance
 const { db, admin } = require('../../lib/firebase');
 const { uploadBuffer } = require('../../lib/cloudinary');
@@ -56,6 +57,96 @@ function sanitizeForTTS(text) {
 
     return clean;
 }
+
+/**
+ * Adds a valid WAV header to raw PCM data.
+ * Defaults: 24kHz, 1 Channel, 16-bit
+ */
+function addWavHeader(samples, sampleRate = 24000, numChannels = 1, bitDepth = 16) {
+    const byteRate = (sampleRate * numChannels * bitDepth) / 8;
+    const blockAlign = (numChannels * bitDepth) / 8;
+    const dataSize = samples.length;
+    const chunkSize = 36 + dataSize;
+
+    const buffer = Buffer.alloc(44);
+
+    // RIFF chunk descriptor
+    buffer.write('RIFF', 0);
+    buffer.writeUInt32LE(chunkSize, 4);
+    buffer.write('WAVE', 8);
+
+    // fmt sub-chunk
+    buffer.write('fmt ', 12);
+    buffer.writeUInt32LE(16, 16); // Subchunk1Size (16 for PCM)
+    buffer.writeUInt16LE(1, 20); // AudioFormat (1 for PCM)
+    buffer.writeUInt16LE(numChannels, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(byteRate, 28);
+    buffer.writeUInt16LE(blockAlign, 32);
+    buffer.writeUInt16LE(bitDepth, 34);
+
+    // data sub-chunk
+    buffer.write('data', 36);
+    buffer.writeUInt32LE(dataSize, 40);
+
+    return Buffer.concat([buffer, samples]);
+}
+
+/**
+ * 🎙️ Generates Audio using Gemini Native Audio (Primary)
+ */
+async function generateGeminiAudio(text) {
+    const apiKey = process.env.AUDIO_API;
+    if (!apiKey) {
+        console.warn('⚠️ [AudioGen] process.env.AUDIO_API is missing. Skipping Gemini.');
+        return null;
+    }
+
+    try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+            model: 'models/gemini-2.5-flash-preview-tts',
+            apiVersion: 'v1alpha'
+        });
+
+        console.log('🎙️ [AudioGen] Attempting Gemini Native Audio (Primary)...');
+
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: text }] }],
+            generationConfig: {
+                responseModalities: ["AUDIO"]
+            }
+        });
+
+        const response = result.response;
+
+        if (response.candidates && response.candidates[0].content.parts[0].inlineData) {
+            const part = response.candidates[0].content.parts[0];
+            const audioData = part.inlineData.data;
+            const mimeType = part.inlineData.mimeType || 'audio/wav';
+
+            let buffer = Buffer.from(audioData, 'base64');
+
+            // If raw PCM, add WAV header
+            if (mimeType.includes('pcm') || mimeType.includes('L16')) {
+                console.log('   ℹ️ Gemini returned Raw PCM. Adding WAV header...');
+                buffer = addWavHeader(buffer, 24000, 1, 16);
+            }
+
+            console.log(`✅ [AudioGen] Gemini Success! (${buffer.length} bytes)`);
+            return buffer;
+        } else {
+            console.warn('⚠️ [AudioGen] Gemini response empty or invalid format.');
+            return null;
+        }
+
+    } catch (error) {
+        console.warn(`⚠️ [AudioGen] Gemini Generation Failed: ${error.message}`);
+        // Return null to trigger fallback
+        return null;
+    }
+}
+
 
 /**
  * Retrieves all available ElevenLabs API keys from env.
@@ -117,49 +208,56 @@ async function generateAndStoreAudio(text, articleId) {
             return doc.data().audioUrl;
         }
 
-        // 2. ULTIMATE FALLBACK LOOP
-        let audioBuffer = null;
-        let lastError = null;
+        // 2. PRIMARY: Try Gemini Native Audio
+        let audioBuffer = await generateGeminiAudio(cleanText);
 
-        console.log(`🎙️ [AudioGen] Starting Generation with ${apiKeys.length} available keys...`);
+        // 3. FALLBACK: ElevenLabs (If Gemini failed)
+        // 3. FALLBACK: ElevenLabs (If Gemini failed)
+        if (!audioBuffer) {
+            console.log(`⚠️ [AudioGen] Fallback: Switching to ElevenLabs...`);
+            let lastError = null;
 
-        for (let i = 0; i < apiKeys.length; i++) {
-            const currentKey = apiKeys[i];
-            const maskedKey = currentKey.substring(0, 4) + '...';
-            console.log(`   Attempt ${i + 1}/${apiKeys.length} using key: ${maskedKey}`);
+            console.log(`🎙️ [AudioGen] Starting ElevenLabs Generation with ${apiKeys.length} available keys...`);
 
-            try {
-                const response = await axios({
-                    method: 'post',
-                    url: `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
-                    headers: {
-                        'Accept': 'audio/mpeg',
-                        'xi-api-key': currentKey,
-                        'Content-Type': 'application/json',
-                    },
-                    data: {
-                        text: cleanText, // 🛡️ Using sanitized text
-                        model_id: "eleven_multilingual_v2",
-                        vote_confidence: 0.5
-                    },
-                    responseType: 'arraybuffer'
-                });
+            for (let i = 0; i < apiKeys.length; i++) {
+                const currentKey = apiKeys[i];
+                const maskedKey = currentKey.substring(0, 4) + '...';
+                console.log(`   Attempt ${i + 1}/${apiKeys.length} using key: ${maskedKey}`);
 
-                audioBuffer = Buffer.from(response.data);
-                console.log(`   ✅ Success with Key ${i + 1}! (${audioBuffer.length} bytes)`);
-                break; // 🏆 EXIT LOOP ON SUCCESS
+                try {
+                    const response = await axios({
+                        method: 'post',
+                        url: `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+                        headers: {
+                            'Accept': 'audio/mpeg',
+                            'xi-api-key': currentKey,
+                            'Content-Type': 'application/json',
+                        },
+                        data: {
+                            text: cleanText, // 🛡️ Using sanitized text
+                            model_id: "eleven_multilingual_v2",
+                            vote_confidence: 0.5
+                        },
+                        responseType: 'arraybuffer'
+                    });
 
-            } catch (err) {
-                console.warn(`   ⚠️ Key ${i + 1} Failed: ${err.response?.status || err.message}`);
-                lastError = err;
-                // CONTINUE TO NEXT KEY...
+                    audioBuffer = Buffer.from(response.data);
+                    console.log(`   ✅ Success with Key ${i + 1}! (${audioBuffer.length} bytes)`);
+                    break; // 🏆 EXIT LOOP ON SUCCESS
+
+                } catch (err) {
+                    console.warn(`   ⚠️ Key ${i + 1} Failed: ${err.response?.status || err.message}`);
+                    lastError = err;
+                    // CONTINUE TO NEXT KEY...
+                }
             }
         }
 
         if (!audioBuffer) {
-            console.error("❌ [AudioGen] All API Keys Exhausted. Generation Failed.");
-            throw lastError || new Error("All API keys failed.");
+            console.error("❌ [AudioGen] All Strategies Failed (Gemini & ElevenLabs). Generation Failed.");
+            throw lastError || new Error("All TTS services failed.");
         }
+
 
         // 3. Upload to Cloudinary
         console.log(`   --> Uploading to Cloudinary...`);
