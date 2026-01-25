@@ -132,6 +132,9 @@ export default function AudioPlayer({ text, audioUrl }) {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      // Detach source to prevent "ERR_FILE_NOT_FOUND" if browser tries to fetch revoked blob
+      audioRef.current.src = '';
+      audioRef.current.load();
     }
 
     // 2. Stop Browser Native TTS
@@ -309,7 +312,7 @@ export default function AudioPlayer({ text, audioUrl }) {
       {(playing || audioRef.current || loading) && isSticky && (
         <div
           onClick={() => setIsExpanded(true)}
-          className={`fixed bottom-6 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-[600px] z-[9999] animate-in slide-in-from-bottom-5 duration-300 fade-in
+          className={`fixed bottom-6 left-4 right-4 lg:left-1/2 lg:-translate-x-1/2 lg:w-[600px] z-[9999] animate-in slide-in-from-bottom-5 duration-300 fade-in
             ${isExpanded ? 'bg-black/90 rounded-3xl cursor-default' : 'cursor-pointer'}
           `}
         >

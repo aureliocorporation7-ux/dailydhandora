@@ -58,7 +58,7 @@ export default function PWAInstallButton() {
             {/* Mobile: Sleek Icon Button with Glow */}
             <button
                 onClick={handleInstallClick}
-                className="md:hidden relative group flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-neutral-800 to-neutral-900 border border-white/10 hover:border-primary/50 shadow-lg shadow-black/50 transition-all duration-300"
+                className="lg:hidden relative group flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-neutral-800 to-neutral-900 border border-white/10 hover:border-primary/50 shadow-lg shadow-black/50 transition-all duration-300"
                 aria-label="Install App"
             >
                 <div className="absolute inset-0 rounded-full bg-primary/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -68,7 +68,7 @@ export default function PWAInstallButton() {
             {/* Desktop: Premium Gradient Pill */}
             <button
                 onClick={handleInstallClick}
-                className="hidden md:flex items-center space-x-2 bg-gradient-to-r from-neutral-900 to-neutral-800 hover:from-primary hover:to-orange-600 text-white border border-white/10 hover:border-transparent px-4 py-2 rounded-full transition-all duration-300 shadow-lg group relative overflow-hidden"
+                className="hidden lg:flex items-center space-x-2 bg-gradient-to-r from-neutral-900 to-neutral-800 hover:from-primary hover:to-orange-600 text-white border border-white/10 hover:border-transparent px-4 py-2 rounded-full transition-all duration-300 shadow-lg group relative overflow-hidden"
                 aria-label="Install App"
             >
                 {/* Shimmer Effect */}

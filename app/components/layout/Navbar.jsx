@@ -42,7 +42,7 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden lg:flex items-center space-x-8">
             {menuItems.map((item, idx) => (
               <Link
                 key={idx}
@@ -61,7 +61,7 @@ export default function Navbar() {
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden flex items-center space-x-4">
+          <div className="lg:hidden flex items-center space-x-2">
             <PWAInstallButton />
             <NotificationBell />
             <button
@@ -77,7 +77,7 @@ export default function Navbar() {
 
       {/* Mobile Navigation */}
       {isOpen && (
-        <div className="md:hidden bg-neutral-900 border-t border-neutral-800 shadow-2xl absolute w-full left-0">
+        <div className="lg:hidden bg-neutral-900 border-t border-neutral-800 shadow-2xl absolute w-full left-0">
           <div className="px-4 pt-4 pb-6 space-y-3">
             {menuItems.map((item, idx) => (
               <Link

@@ -19,9 +19,12 @@ const https = require('https');
 const aiWriter = require('../services/ai-writer');
 const dbService = require('../services/db-service');
 const topicCache = require('../services/topic-cache');
+const pdfProcessor = require('../services/gemini-pdf-processor'); // 📄 PDF Processor Integration
 const { getCategoryFallback } = require('../../lib/stockImages');
+const { isFresh } = require('../../lib/dateUtils'); // 📅 FRESHNESS IMPORT
 
 // HTTPS Agent to handle government site SSL issues
+
 const httpsAgent = new https.Agent({
     rejectUnauthorized: true,
     secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT
@@ -194,43 +197,57 @@ async function fetchOrders() {
  * Generates a Hindi news article from an order title using AI.
  * Also asks AI to classify the category for cross-verification.
  */
-async function generateArticleFromOrder(title, pdfLink, documentType) {
+async function generateArticleFromOrder(title, pdfLink, documentType, pdfContent = null) {
+    // 🕒 TIME AWARENESS: Get Current Date in IST
+    const now = new Date();
+    const todayIST = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
+
+    // Determine context based on availability of PDF content
+    const context = pdfContent
+        ? `✅ STATUS: SUCCESS - Full PDF Content Available.\nSOURCE DATA:\n${pdfContent.substring(0, 50000)}...`
+        : `⚠️ STATUS: FAILED - PDF Content Unavailable.\n⚠️ INSTRUCTION: LIMITED DATA MODE. Write a PROFESSIONAL, ENGAGING article based strictly on the Title: "${title}". Use journalistic flair to explain the significance of this topic. Do not invent specific dates/numbers, but DO explain the context fully.`;
+
     const prompt = `
-ROLE: You are a senior editor for DailyDhandora, Nagaur's trusted news portal.
+ROLE: You are the 'Senior Editor' for DailyDhandora, a hyper-local news portal in Nagaur, Rajasthan.
 
-TASK: Write a professional Hindi news article (150-200 words) based on this Official Government Order.
+TASK: Transform this Official Government Order into a high-quality, easy-to-understand Hindi news update.
 
-INPUT:
-- Order Title: ${title}
-- PDF Link: ${pdfLink}
-- Document Type: ${documentType}
+CONTEXT:
+- **Current Date:** ${todayIST} (Use this to be Time Aware. e.g., if order is for tomorrow, say "Kal/Tomorrow").
+- **Order Title:** ${title}
+- **Document Type:** ${documentType}
+- ${context}
 
 OUTPUT GUIDELINES:
-1. **Headline**: Make it urgent and catchy in Hindi (e.g., 'बड़ी खबर: शिक्षा विभाग ने जारी किया नया आदेश...').
-2. **Content** (HTML format with <p>, <ul>, <li>):
-   - Paragraph 1: State that the Bikaner Directorate/Jaipur Secretariat has issued an important ${documentType.toLowerCase()} regarding this topic.
-   - Paragraph 2: Briefly explain what this order might contain based on the title.
-   - Paragraph 3: Advise readers to download the official PDF for complete details.
-   - Call to Action: Include a download link for the PDF.
-3. **Tags**: Relevant tags for this order.
-4. **Category**: You MUST use EXACTLY one of these two category names (copy-paste exactly):
-   - "भर्ती व रिजल्ट" → If about: Bharti/भर्ती, Recruitment, Exam/परीक्षा, Result/परिणाम, Admit Card, Answer Key, Vacancy, REET, RPSC (FOR JOB SEEKERS)
-   - "शिक्षा विभाग" → If about: Transfer/तबादला, Salary/वेतन, DA/महंगाई भत्ता, Seniority/वरिष्ठता, Promotion/पदोन्नति, Shivira/शिविरा, Holiday/अवकाश, Posting (FOR TEACHERS)
-   ⚠️ IMPORTANT: Use EXACTLY these names, not variations like "भर्ती" or "Recruitment" - use the full exact string!
+1. **Headline**:  Urgent & Verified (e.g., 'बड़ी खबर: शिक्षा विभाग का नया आदेश जारी...').
+2. **Content Structure** (HTML):
+   - **Lead (Bold)**: One crisp line explaining *exactly* what happened.
+   - **Key Details (Bullet Points)**:
+     ${pdfContent ?
+            `*   **Subject**: Extracted from PDF.
+     *   **Order No**: Extracted from PDF.
+     *   **Date**: Extracted from PDF.
+     *   **Action**: Summarize instructions.` :
+            `*   **Subject**: [Elaborate on the Title's topic professionally]
+     *   **Context**: [Explain why this topic is important for teachers/students]
+     *   **Action**: "Please check the official PDF below for exact details."`}
+   - **Closing**: Advise downloading the PDF.
+   
+3. **Quality Rules**:
+   - **Immediate Understanding**: The user should understand the full news in the first 5 seconds.
+   - **Time Aware**: Use relative time context (Aaj/Kal).
+   - **SAFE MODE (If PDF Failed)**: If STATUS is FAILED, do NOT be dry. Write a flowing, professional news piece about the *topic* mentioned in the title. Make it sound authoritative. Avoid inventing specific numbers/dates, but expand on the "Why" and "Who".
 
-CRITICAL RULES:
-- Write in Hindi using Devanagari script.
-- DO NOT invent specific details not mentioned in the title.
-- Use professional government news language.
-- Include the PDF download CTA at the end.
-- Category MUST be exactly "भर्ती व रिजल्ट" or "शिक्षा विभाग" - no other value!
+4. **Category**: EXACTLY one of:
+   - "भर्ती व रिजल्ट" (Jobs/Exams)
+   - "शिक्षा विभाग" (General Education/Teachers)
 
 OUTPUT FORMAT (JSON only):
 {
-  "headline": "Hindi headline here",
-  "content": "<p>First paragraph...</p><p>Second...</p><p><a href='${pdfLink}' target='_blank'>👉 आधिकारिक आदेश PDF डाउनलोड करें</a></p>",
-  "tags": ["Official Order", "Teachers News", "Rajasthan Education"],
-  "category": "भर्ती व रिजल्ट" 
+  "headline": "...",
+  "content": "<p><b>Lead line...</b></p><ul>...</ul><p>...",
+  "tags": ["..."],
+  "category": "..." 
 }
 `;
 
@@ -253,8 +270,13 @@ async function processOrder(order, settings) {
 
     // Extract order type (Hindi)
     const orderType = order.TypeNameHindi || order.TypeName || 'आदेश';
-    const orderDate = order.Date ? new Date(order.Date).toLocaleDateString('hi-IN') : '';
+    const orderDate = order.Date || null;
 
+    // 📅 FRESHNESS CHECK: Only process today/yesterday orders
+    if (orderDate && !isFresh(orderDate)) {
+        console.log(`     📅 [API Bot] Skipping: Old order from ${new Date(orderDate).toLocaleDateString('hi-IN')}`);
+        return false;
+    }
 
     if (!title || title.length < 10) {
         console.log(`     ⚠️ [API Bot] Skipping: Empty/short title`);
@@ -273,8 +295,25 @@ async function processOrder(order, settings) {
 
     console.log(`\n  🏛️ [API Bot] NEW ORDER: "${title.substring(0, 60)}..."`);
 
-    // Generate article using AI
-    const aiData = await generateArticleFromOrder(title, pdfLink, orderType);
+    // 📄 PDF CONTENT EXTRACTION
+    let pdfContent = null;
+    if (pdfLink && pdfLink.startsWith('http')) {
+        console.log(`     📄 [API Bot] Extracting text from PDF...`);
+        try {
+            const pdfResult = await pdfProcessor.processPdf(pdfLink);
+            if (pdfResult.success && pdfResult.content) {
+                pdfContent = pdfResult.content;
+                console.log(`     ✅ [API Bot] PDF Extracted: ${pdfContent.length} chars (Model: ${pdfResult.model})`);
+            } else {
+                console.log(`     ⚠️ [API Bot] PDF Extraction Failed: ${pdfResult.error} - Falling back to title only.`);
+            }
+        } catch (pdfErr) {
+            console.log(`     ⚠️ [API Bot] PDF Processor Error: ${pdfErr.message}`);
+        }
+    }
+
+    // Generate article using AI (with extracted PDF content if available)
+    const aiData = await generateArticleFromOrder(title, pdfLink, orderType, pdfContent);
     if (!aiData || !aiData.headline) {
         console.log(`     ❌ [API Bot] AI generation failed`);
         return false;

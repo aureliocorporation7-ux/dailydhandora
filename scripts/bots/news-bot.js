@@ -9,6 +9,8 @@ const { generateAndStoreAudio } = require('../services/audio-gen');
 const { getCategoryFallback } = require('../../lib/stockImages');
 const { isFresh } = require('../../lib/dateUtils');
 const { getPrompt, fillTemplate } = require('../services/prompt-service');
+const gistSelector = require('../services/gist-selector');
+const { notifyNewArticle } = require('../services/push-notification');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -194,7 +196,24 @@ async function fetchBhaskarNews(settings) {
 
     console.log(`     📰 Total unique articles: ${articles.length}`);
 
+    // 🌾 PRIORITY SORT: Mandi articles come FIRST (guaranteed daily mandi)
+    // Only specific mandi-related URL patterns are prioritized
     articles.sort((a, b) => {
+        const isMandiUrl = (url) => {
+            const lowerUrl = url.toLowerCase();
+            // Specific patterns only - avoid broad matches like 'rate' (could match 'corporate')
+            return lowerUrl.includes('mandi') || lowerUrl.includes('market-rate') ||
+                lowerUrl.includes('-bhav-') || lowerUrl.includes('crop-price');
+        };
+
+        const aIsMandi = isMandiUrl(a.link);
+        const bIsMandi = isMandiUrl(b.link);
+
+        // Mandi articles first
+        if (aIsMandi && !bIsMandi) return -1;
+        if (!aIsMandi && bIsMandi) return 1;
+
+        // Then sort by article ID (newer first)
         const getId = (url) => {
             const match = url.match(/-(\d+)\.html/);
             return match ? parseInt(match[1], 10) : 0;
@@ -202,8 +221,18 @@ async function fetchBhaskarNews(settings) {
         return getId(b.link) - getId(a.link);
     });
 
-    const targetArticles = articles.slice(0, 15); // Increased from 5 to 15 to find Mandi news
+    console.log(`     🌾 Mandi Priority URLs: ${articles.filter(a => a.link.toLowerCase().includes('mandi')).length}`);
+
+    const targetArticles = articles.slice(0, 25); // Increased to get more candidates for GIST
     let processedCount = 0;
+
+    // ==========================================
+    // 🧠 PHASE 1: COLLECT ALL SCRAPED ARTICLES
+    // ==========================================
+    console.log(`\n  🔄 [News Bot] PHASE 1: Scraping articles for GIST selection...`);
+
+    let scrapedArticles = [];
+    let mandiArticles = [];
 
     for (const item of targetArticles) {
         const isDuplicate = await dbService.checkDuplicate('articles', 'sourceUrl', item.link);
@@ -249,40 +278,88 @@ async function fetchBhaskarNews(settings) {
         ];
         const hasBlacklistedWord = mandiBlacklist.some(w => checkText.includes(w));
 
-        // 4. DECISION LOGIC:
-        // Route to Mandi ONLY if: (Has Price Data OR Has Strict Mandi Terms) AND NO Blacklisted Words
-        const shouldRouteToMandi = (hasPriceData || hasMandiContext) && !hasBlacklistedWord;
+        // 5. URL-BASED MANDI DETECTION (Bhaskar often puts 'mandi' in URL)
+        const urlLower = item.link.toLowerCase();
+        const hasMandiUrl = urlLower.includes('mandi') || urlLower.includes('market-rate');
+
+        // 6. DECISION LOGIC:
+        // Route to Mandi if: (Has Price Data OR Has Mandi Terms OR Has Mandi URL) AND NO Blacklisted Words
+        const shouldRouteToMandi = (hasPriceData || hasMandiContext || hasMandiUrl) && !hasBlacklistedWord;
 
         if (shouldRouteToMandi) {
+            // Store Mandi articles separately for immediate processing
+            mandiArticles.push({
+                ...scrapedData,
+                sourceUrl: item.link,
+                source: item.source
+            });
+        } else {
+            // Collect for GIST selection
+            scrapedArticles.push({
+                ...scrapedData,
+                sourceUrl: item.link,
+                source: item.source
+            });
+        }
+
+        await sleep(2000); // Polite delay between scrapes
+    }
+
+    console.log(`     📊 Scraped: ${scrapedArticles.length} general + ${mandiArticles.length} mandi articles`);
+
+    // ==========================================
+    // 🌾 PHASE 2: PROCESS MANDI NEWS (Priority)
+    // ==========================================
+    if (mandiArticles.length > 0) {
+        console.log(`\n  🌾 [News Bot] PHASE 2: Processing ${mandiArticles.length} Mandi articles...`);
+
+        for (const article of mandiArticles) {
             console.log(`\n  🌾 [News Bot] DETECTED MANDI NEWS (Strict Check Passed)`);
-            console.log(`     📊 Price Pattern: ${hasPriceData}, Mandi Terms: ${hasMandiContext}, Blacklist: ${hasBlacklistedWord}`);
 
             // Generate Enforced Date (Today's Date in IST)
             const todayIST = new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'long', day: 'numeric' });
 
-            const mandiResult = await mandiBot.processRawMandiData(scrapedData.headline, scrapedData.body, item.link, settings, todayIST);
+            const mandiResult = await mandiBot.processRawMandiData(article.headline, article.body, article.sourceUrl, settings, todayIST);
 
-            // 🛡️ REJECTION HANDLER: If Mandi Bot rejects, process as general news
+            // 🛡️ REJECTION HANDLER: If Mandi Bot rejects, add back to general pool
             if (mandiResult && mandiResult.rejected) {
-                console.log(`     ↩️ [News Bot] Mandi REJECTED (${mandiResult.reason}). Processing as General News...`);
-                const success = await processAndSave(scrapedData.headline, scrapedData.body, item.link, 'Dainik Bhaskar', settings);
-                if (success) processedCount++;
+                console.log(`     ↩️ [News Bot] Mandi REJECTED (${mandiResult.reason}). Adding to GIST pool...`);
+                scrapedArticles.push(article);
             } else if (mandiResult === true) {
                 processedCount++;
             }
-            continue; // Skip normal news processing either way
-        } else if (hasBlacklistedWord) {
-            // Log why it was blocked from Mandi
-            const matched = mandiBlacklist.find(w => checkText.includes(w));
-            console.log(`     🚫 [News Bot] Mandi BLOCKED: Found blacklisted term "${matched}"`);
         }
+    }
 
-        console.log(`\n  ✨ [Bhaskar] NEW LATEST NEWS: ${scrapedData.headline}`);
-        const success = await processAndSave(scrapedData.headline, scrapedData.body, item.link, 'Dainik Bhaskar', settings);
-        if (success) processedCount++;
+    // ==========================================
+    // 🧠 PHASE 3: GIST SELECTION FOR DIVERSITY
+    // ==========================================
+    if (scrapedArticles.length > 0) {
+        console.log(`\n  🧠 [News Bot] PHASE 3: Applying GIST algorithm to ${scrapedArticles.length} articles...`);
 
-        if (processedCount >= 6) break; // Increased limit to allow more news + mandi
-        await sleep(5000); // Polite delay
+        // Get config from settings (with sensible defaults)
+        const gistLambda = settings.gistLambda || 1.0;
+        const maxGeneralArticles = settings.maxGeneralArticles || 10; // Configurable! Default: 10
+        const maxArticles = Math.max(1, maxGeneralArticles); // Ensure at least 1
+
+        if (maxArticles > 0) {
+            // 🎯 GIST SELECTION: Diverse + High-Utility articles
+            const diverseArticles = await gistSelector.selectDiverse(
+                scrapedArticles,
+                maxArticles,
+                gistLambda
+            );
+
+            // Process selected diverse articles
+            for (const article of diverseArticles) {
+                console.log(`\n  ✨ [Bhaskar] GIST SELECTED: ${article.headline}`);
+                const success = await processAndSave(article.headline, article.body, article.sourceUrl, 'Dainik Bhaskar', settings);
+                if (success) processedCount++;
+                await sleep(5000); // Polite delay
+            }
+        } else {
+            console.log(`     ℹ️ [News Bot] Max articles reached from Mandi, skipping GIST.`);
+        }
     }
 
     return processedCount;
@@ -416,8 +493,10 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
       "headline": "Hindi headline here",
       "content": "<p>...</p>",
       "tags": ["Nagaur", "Rajasthan"],
-      "category": "मंडी भाव"
+      "category": "नागौर न्यूज़"
     }
+    
+    ⚠️ STRICT: "मंडी भाव" is ONLY for crop market prices with ₹/quintal rates. NOT for melas, fairs, elections, or general news!
     `;
 
 
@@ -438,61 +517,65 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
     const cleanHeadline = sanitizeContent(aiData.headline);
     const cleanContent = sanitizeContent(aiData.content);
 
-    // 🏷️ AI CATEGORY VERIFICATION (Dual-Layer)
+    // 🏷️ AI CATEGORY - PRIMARY SOURCE OF TRUTH
     const VALID_CATEGORIES = ['मंडी भाव', 'नागौर न्यूज़', 'शिक्षा विभाग', 'सरकारी योजना', 'भर्ती व रिजल्ट'];
 
-    function normalizeCategory(cat) {
-        if (!cat) return null;
-        const lower = cat.toLowerCase();
+    /**
+     * Simple validation: Check if AI's category is in valid list
+     * If valid → use it directly
+     * If invalid → default to नागौर न्यूज़
+     */
+    function validateCategory(aiCategory) {
+        if (!aiCategory) return null;
 
-        // Mandi variations
-        if (lower.includes('मंडी') || lower.includes('mandi') || lower.includes('भाव') || lower.includes('rate') || lower.includes('crop'))
-            return 'मंडी भाव';
-        // Recruitment variations
-        if (lower.includes('भर्ती') || lower.includes('रिजल्ट') || lower.includes('exam') || lower.includes('vacancy') || lower.includes('result'))
-            return 'भर्ती व रिजल्ट';
-        // Education variations
-        if (lower.includes('शिक्षा') || lower.includes('विभाग') || lower.includes('education') || lower.includes('teacher'))
-            return 'शिक्षा विभाग';
-        // Scheme variations
-        if (lower.includes('योजना') || lower.includes('scheme') || lower.includes('subsidy') || lower.includes('welfare'))
-            return 'सरकारी योजना';
-        // Local news
-        if (lower.includes('नागौर') || lower.includes('nagaur') || lower.includes('local') || lower.includes('news'))
-            return 'नागौर न्यूज़';
+        // Direct match check
+        if (VALID_CATEGORIES.includes(aiCategory)) {
+            return aiCategory;
+        }
 
-        if (VALID_CATEGORIES.includes(cat)) return cat;
-        return null;
+        // Fuzzy match for common variations
+        const lower = aiCategory.toLowerCase();
+        if (lower.includes('मंडी') && lower.includes('भाव')) return 'मंडी भाव';
+        if (lower.includes('भर्ती') || lower.includes('रिजल्ट')) return 'भर्ती व रिजल्ट';
+        if (lower.includes('शिक्षा')) return 'शिक्षा विभाग';
+        if (lower.includes('योजना')) return 'सरकारी योजना';
+        if (lower.includes('नागौर') || lower.includes('न्यूज')) return 'नागौर न्यूज़';
+
+        return null; // Invalid category
     }
 
-    // Code-level keyword detection (fallback)
-    const contentCheck = `${rawHeadline} ${rawBody}`.toLowerCase();
-    const mandiKeywords = ['मंडी', 'mandi', 'भाव', 'rate', 'क्विंटल', 'quintal', 'सरसों', 'मूंग', 'गेहूं', 'चना', 'sarso', 'moong', 'crop price'];
-    const recruitKeywords = ['भर्ती', 'vacancy', 'result', 'परीक्षा', 'exam', 'admit card', 'answer key', 'reet', 'rpsc'];
-    const eduKeywords = ['transfer', 'तबादला', 'salary', 'वेतन', 'seniority', 'वरिष्ठता', 'promotion', 'पदोन्नति'];
-    const schemeKeywords = ['योजना', 'scheme', 'subsidy', 'benefit', 'welfare', 'आवेदन'];
+    // 🎯 FINAL CATEGORY LOGIC: AI is the boss!
+    const validatedAiCategory = validateCategory(aiData.category);
 
-    let codeCategory = 'नागौर न्यूज़'; // Default
-    if (mandiKeywords.some(kw => contentCheck.includes(kw))) codeCategory = 'मंडी भाव';
-    else if (recruitKeywords.some(kw => contentCheck.includes(kw))) codeCategory = 'भर्ती व रिजल्ट';
-    else if (eduKeywords.some(kw => contentCheck.includes(kw))) codeCategory = 'शिक्षा विभाग';
-    else if (schemeKeywords.some(kw => contentCheck.includes(kw))) codeCategory = 'सरकारी योजना';
-
-    // AI Category (primary) with normalization
-    const aiCategory = normalizeCategory(aiData.category);
-
-    // Final Category: AI > Code
     let verifiedCategory;
-    if (aiCategory) {
-        verifiedCategory = aiCategory;
-        if (aiCategory === codeCategory) {
-            console.log(`     ✅ [News Bot] Category VERIFIED: ${verifiedCategory}`);
-        } else {
-            console.log(`     🔄 [News Bot] Category: ${verifiedCategory} (AI) | Code: ${codeCategory}`);
+    if (validatedAiCategory) {
+        // ✅ AI gave valid category - USE IT DIRECTLY
+        verifiedCategory = validatedAiCategory;
+
+        // 🛡️ FINAL SAFETY: If AI says "मंडी भाव" but content has no price data, override!
+        if (verifiedCategory === 'मंडी भाव') {
+            const contentCheck = `${rawHeadline} ${rawBody}`.toLowerCase();
+            const priceIndicators = ['क्विंटल', 'quintal', 'रुपये', '₹', 'rs', 'प्रति क्विंटल', 'per quintal', '/क्विं'];
+            const mandiTerms = ['मंडी भाव', 'मंडी रेट', 'kृषि उपज मंडी', 'mandi bhav'];
+            const hasPriceData = priceIndicators.some(p => contentCheck.includes(p));
+            const hasMandiContext = mandiTerms.some(t => contentCheck.includes(t));
+
+            // Block words that should NEVER be in Mandi
+            const mandiBlacklist = ['मेला', 'पशु मेला', 'मतदान', 'शपथ', 'चुनाव', 'एसपी', 'पुलिस', 'election', 'fair', 'festival'];
+            const hasBlacklistedWord = mandiBlacklist.some(w => contentCheck.includes(w));
+
+            if (hasBlacklistedWord || (!hasPriceData && !hasMandiContext)) {
+                console.log(`     🚫 [News Bot] SAFETY OVERRIDE: AI said "मंडी भाव" but no price/mandi data found!`);
+                console.log(`     ↩️ Overriding to "नागौर न्यूज़" to prevent misclassification.`);
+                verifiedCategory = 'नागौर न्यूज़';
+            }
         }
+
+        console.log(`     🤖 [News Bot] AI Category: ${verifiedCategory}`);
     } else {
-        verifiedCategory = codeCategory;
-        console.log(`     🏷️ [News Bot] Category (fallback): ${verifiedCategory}`);
+        // ⚠️ AI gave invalid/null category - default to local news
+        verifiedCategory = 'नागौर न्यूज़';
+        console.log(`     ⚠️ [News Bot] AI gave invalid category "${aiData.category}", defaulting to: ${verifiedCategory}`);
     }
 
 
@@ -557,6 +640,22 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
             }
         } catch (audioErr) {
             console.error(`     ⚠️ [Audio] Gen Failed: ${audioErr.message}`);
+        }
+
+        // 🔔 SEND PUSH NOTIFICATION
+        try {
+            if (settings.enablePushNotifications !== false) { // Default enabled
+                await notifyNewArticle({
+                    headline: cleanHeadline,
+                    id: savedId,
+                    imageUrl: imageUrl,
+                    category: verifiedCategory
+                });
+            } else {
+                console.log(`     🔕 [Push] Skipped: Push Notifications DISABLED in Settings.`);
+            }
+        } catch (pushErr) {
+            console.error(`     ⚠️ [Push] Notification Failed: ${pushErr.message}`);
         }
 
         return true;

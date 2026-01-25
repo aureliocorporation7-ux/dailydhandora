@@ -10,6 +10,9 @@
 
 import { db } from '@/lib/firebase';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request) {
     // Dynamic base URL - works on any domain
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||

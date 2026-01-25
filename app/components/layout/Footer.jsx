@@ -3,10 +3,10 @@ import Link from 'next/link';
 export default function Footer() {
   return (
     <footer className="bg-neutral-900 border-t border-neutral-800 text-gray-400 py-12">
-      <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
-        
+      <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-4 gap-8">
+
         {/* Column 1: Brand */}
-        <div className="col-span-1 md:col-span-2">
+        <div className="col-span-1 lg:col-span-2">
           <Link href="/" className="inline-block">
             <h2 className="text-2xl font-bold text-white mb-2">DailyDhandora</h2>
             <p className="text-[10px] text-primary uppercase tracking-widest font-bold mb-4">नागौर का अपना डिजिटल पोर्टल</p>

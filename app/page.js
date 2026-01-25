@@ -1,5 +1,6 @@
 import { db } from '@/lib/firebase';
 import ArticleCard from './components/ArticleCard';
+import TrendingSection from './components/TrendingSection';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -37,6 +38,11 @@ export default async function Home() {
   return (
     <div className="bg-[#0a0a0a] text-white" suppressHydrationWarning={true}>
       <main className="max-w-7xl mx-auto px-4 py-8">
+
+        {/* 🔥 Trending Section */}
+        <TrendingSection articles={articles} />
+
+        {/* ताज़ा समाचार Grid */}
         <h2 className="text-2xl font-bold mb-6 text-primary border-l-4 border-primary pl-3">ताज़ा समाचार</h2>
         {articles.length === 0 ? (
           <p className="text-gray-400 text-center py-12">अभी कोई समाचार उपलब्ध नहीं है।</p>

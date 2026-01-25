@@ -1,5 +1,8 @@
 const { db } = require('../lib/firebase');
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function sitemap() {
   // Dynamic base URL - works on any domain (Render, Vercel, custom)
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||

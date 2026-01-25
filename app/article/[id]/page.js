@@ -6,6 +6,7 @@ import Image from 'next/image';
 import ArticleMeta from '@/app/components/ArticleMeta';
 import AudioPlayer from '@/app/components/AudioPlayer';
 import ArticleActions from '@/app/components/ArticleActions';
+import ShareButtons from '@/app/components/ShareButtons';
 import ViewTracker from '@/app/components/ViewTracker';
 
 export const revalidate = 3600; // Revalidate every hour
@@ -101,19 +102,46 @@ export default async function ArticlePage({ params }) {
   const relatedArticles = await getRelatedArticles(article.category, article.id);
   const isPosterMode = POSTER_CATEGORIES.includes(article.category);
 
-  // SEO: NewsArticle Schema
+  // Dynamic base URL
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.onrender.com';
+
+  // 🔍 SEO: Enhanced NewsArticle Schema (Google Rich Results)
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'NewsArticle',
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': `${baseUrl}/article/${article.id}`
+    },
     headline: article.headline,
-    image: [article.imageUrl],
+    description: article.summary || article.headline?.substring(0, 160),
+    image: {
+      '@type': 'ImageObject',
+      url: article.imageUrl,
+      width: 1200,
+      height: 675
+    },
     datePublished: article.createdAt,
     dateModified: article.updatedAt || article.createdAt,
-    author: [{
+    author: {
+      '@type': 'Person',
+      name: 'Abhishek',
+      url: `${baseUrl}/about`
+    },
+    publisher: {
       '@type': 'Organization',
-      name: 'DailyDhandora Team',
-      url: 'https://dailydhandora.vercel.app'
-    }]
+      name: 'DailyDhandora',
+      logo: {
+        '@type': 'ImageObject',
+        url: `${baseUrl}/logo.png`,
+        width: 512,
+        height: 512
+      }
+    },
+    articleSection: article.category,
+    keywords: article.tags?.join(', ') || article.category,
+    inLanguage: 'hi-IN',
+    isAccessibleForFree: true
   };
 
   return (
@@ -189,6 +217,17 @@ export default async function ArticlePage({ params }) {
 
         <div className="prose prose-invert max-w-none prose-lg prose-headings:text-primary prose-a:text-blue-400 hover:prose-a:text-blue-300">
           <div dangerouslySetInnerHTML={{ __html: article.content }} />
+        </div>
+
+        {/* 📲 SHARE SECTION - Prominent placement for viral sharing */}
+        <div className="mt-8 p-6 bg-gradient-to-r from-neutral-900 to-neutral-800 border border-neutral-700 rounded-2xl shadow-xl">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <p className="text-lg font-bold text-white">📲 खबर पसंद आई?</p>
+              <p className="text-sm text-gray-400">अपने दोस्तों के साथ शेयर करें!</p>
+            </div>
+            <ShareButtons article={article} />
+          </div>
         </div>
 
         <div className="flex justify-end mt-8 pt-6 border-t border-neutral-800">

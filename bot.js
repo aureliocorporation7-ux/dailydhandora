@@ -8,7 +8,8 @@ const mandiBot = require('./scripts/bots/mandi-bot');
 const newsBot = require('./scripts/bots/news-bot');
 const schemeBot = require('./scripts/bots/scheme-bot');
 const eduBot = require('./scripts/bots/edu-bot');
-const apiBot = require('./scripts/bots/api-bot'); // NEW: Official Orders Bot
+const apiBot = require('./scripts/bots/api-bot');
+const digestBot = require('./scripts/bots/digest-bot'); // NEW: Daily Digest
 
 // 🛡️ MEMORY GUARD: ensure only one bot runs at a time (Mutex)
 let isGlobalBotRunning = false;
@@ -19,7 +20,8 @@ const botStatus = {
     mandi: { lastRun: Date.now(), intervalMs: 24 * 60 * 60 * 1000, name: 'Mandi Bot' },
     scheme: { lastRun: Date.now(), intervalMs: 24 * 60 * 60 * 1000, name: 'Scheme Bot' },
     edu: { lastRun: Date.now(), intervalMs: 30 * 60 * 1000, name: 'Edu Bot' },
-    api: { lastRun: Date.now(), intervalMs: 60 * 60 * 1000, name: 'API Bot' } // NEW: 1 hour interval
+    api: { lastRun: Date.now(), intervalMs: 60 * 60 * 1000, name: 'API Bot' },
+    digest: { lastRun: Date.now(), intervalMs: 60 * 60 * 1000, name: 'Digest Bot' } // NEW: Hourly check (sends only at 8 AM)
 };
 
 /**
@@ -73,11 +75,12 @@ setTimeout(() => {
 
 // 2. Schedule Standard Intervals
 // Note: Even if they trigger at same time, Mutex will block concurrent execution
-setInterval(() => runBotSafe('api', apiBot), botStatus.api.intervalMs);     // NEW
+setInterval(() => runBotSafe('api', apiBot), botStatus.api.intervalMs);
 setInterval(() => runBotSafe('mandi', mandiBot), botStatus.mandi.intervalMs);
 setInterval(() => runBotSafe('news', newsBot), botStatus.news.intervalMs);
 setInterval(() => runBotSafe('scheme', schemeBot), botStatus.scheme.intervalMs);
 setInterval(() => runBotSafe('edu', eduBot), botStatus.edu.intervalMs);
+setInterval(() => runBotSafe('digest', digestBot), botStatus.digest.intervalMs); // NEW: Digest Bot
 
 // 3. 🛡️ THE WATCHDOG (Self-Healing Mechanism)
 // Checks every 5 minutes if any bot is stuck or dead.
@@ -101,7 +104,7 @@ setInterval(() => {
             // If the global lock is stuck because a bot crashed without 'finally', fix it.
             // But we have 'finally', so this is rare.
             // We'll just try to run it.
-            runBotSafe(key, { news: newsBot, mandi: mandiBot, scheme: schemeBot, edu: eduBot, api: apiBot }[key]);
+            runBotSafe(key, { news: newsBot, mandi: mandiBot, scheme: schemeBot, edu: eduBot, api: apiBot, digest: digestBot }[key]);
         }
     });
 }, 5 * 60 * 1000); // Check every 5 minutes

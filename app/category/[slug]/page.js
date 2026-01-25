@@ -97,7 +97,11 @@ export default async function CategoryPage({ params }) {
             <p className="text-sm text-gray-600 mt-2">जल्द ही अपडेट होगा!</p>
           </div>
         ) : (
-          <ArticleGrid initialArticles={articles} hindiCategory={hindiCategory} />
+          <ArticleGrid
+            initialArticles={articles}
+            hindiCategory={hindiCategory}
+            apiCategory={apiCategoryMap[slug]}
+          />
         )}
       </main>
     </div>
