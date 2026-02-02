@@ -307,13 +307,15 @@ export async function generateMetadata({ params }) {
     };
   }
 
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.onrender.com';
+
   return {
     title: `${article.headline} - DailyDhandora`,
     description: article.summary || article.headline?.substring(0, 160),
     openGraph: {
       title: article.headline,
       description: article.summary || article.headline?.substring(0, 160),
-      url: `https://dailydhandora.onrender.com/article/${article.id}`,
+      url: `${baseUrl}/article/${article.id}`,
       siteName: 'DailyDhandora',
       images: [
         {
@@ -337,7 +339,7 @@ export async function generateMetadata({ params }) {
       images: [article.imageUrl],
     },
     alternates: {
-      canonical: `https://dailydhandora.onrender.com/article/${article.id}`,
+      canonical: `${baseUrl}/article/${article.id}`,
     },
   };
 }
