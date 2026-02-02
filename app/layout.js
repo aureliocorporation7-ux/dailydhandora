@@ -1,10 +1,12 @@
 import { Inter } from 'next/font/google';
+import { Suspense } from 'react';
 import './globals.css';
 import { NotificationProvider } from './contexts/NotificationContext';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
 import GoogleAdsScript from './components/GoogleAdsScript';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
+import DataTracker from './components/DataTracker';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -102,7 +104,12 @@ export default function RootLayout({ children }) {
             {children}
           </main>
           <Footer />
-          <PushNotificationPrompt />
+          <DataTracker />
+          <div className="fixed z-50">
+            <Suspense fallback={null}>
+              <PushNotificationPrompt />
+            </Suspense>
+          </div>
         </NotificationProvider>
       </body>
     </html>

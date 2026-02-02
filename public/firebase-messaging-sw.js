@@ -1,11 +1,12 @@
-// Firebase Messaging Service Worker
+// 🔔 DIVINE LEVEL Firebase Messaging Service Worker
 // Handles background push notifications for DailyDhandora
+// Version: 2.0 - Supreme Divine Edition
 
 // Import Firebase scripts (compat version for SW)
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
-// Firebase configuration (same as client-side)
+// Firebase configuration
 firebase.initializeApp({
     apiKey: "AIzaSyA32xhmw1KRGA07bxmWr8GHNDuL2qMt-BY",
     authDomain: "dailydhandora.firebaseapp.com",
@@ -17,56 +18,76 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Handle background messages
+console.log('🔔 [FCM SW] Service Worker initialized successfully');
+
+// Handle background messages (app not in focus)
 messaging.onBackgroundMessage((payload) => {
     console.log('🔔 [FCM SW] Background message received:', payload);
 
-    const notificationTitle = payload.notification?.title || payload.data?.title || 'DailyDhandora';
+    // Extract notification data from both notification and data fields
+    const title = payload.notification?.title || payload.data?.title || 'DailyDhandora';
+    const body = payload.notification?.body || payload.data?.body || 'नई खबर आई है!';
+    const image = payload.notification?.image || payload.data?.image || null;
+    const url = payload.data?.url || '/';
+    const articleId = payload.data?.articleId || 'news-' + Date.now();
+
     const notificationOptions = {
-        body: payload.notification?.body || payload.data?.body || 'नई खबर आई है!',
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/badge-72x72.png',
-        image: payload.notification?.image || payload.data?.image || null,
-        tag: payload.data?.articleId || 'default',
-        renotify: true,
-        requireInteraction: true,
-        vibrate: [200, 100, 200],
+        body: body,
+        icon: '/icon-192x192.png',
+        badge: '/icon-192x192.png', // Fallback to main icon as specific badge missing
+        image: image,
+        tag: articleId, // Prevents duplicate notifications
+        renotify: true, // Vibrate even if same tag
+        requireInteraction: true, // Don't auto-dismiss
+        vibrate: [200, 100, 200, 100, 200], // Pattern
         data: {
-            url: payload.data?.url || '/',
-            articleId: payload.data?.articleId || null
+            url: url,
+            articleId: articleId,
+            timestamp: Date.now()
         },
         actions: [
-            { action: 'open', title: '📰 पढ़ें' },
-            { action: 'close', title: '❌ बंद करें' }
+            { action: 'open', title: '📰 पढ़ें', icon: '/icon-192x192.png' },
+            { action: 'close', title: '❌ बाद में' }
         ]
     };
 
     // Show notification
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    return self.registration.showNotification(title, notificationOptions);
 });
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
-    console.log('🔔 [FCM SW] Notification clicked:', event.action);
+    console.log('🔔 [FCM SW] Notification clicked:', event.action, event.notification.data);
 
+    // Close the notification
     event.notification.close();
 
+    // If user clicked close, do nothing
     if (event.action === 'close') {
         return;
     }
 
-    // Open the article URL
+    // Get the URL to open
     const urlToOpen = event.notification.data?.url || '/';
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-            // Check if there's already a window open with the target URL
+            // Try to find an existing window/tab
             for (let client of windowClients) {
-                if (client.url === urlToOpen && 'focus' in client) {
+                // If found a window with the URL, focus it
+                if (client.url.includes(urlToOpen) && 'focus' in client) {
                     return client.focus();
                 }
             }
-            // If no window is open, open a new one
+
+            // If any window exists, navigate it to the URL
+            for (let client of windowClients) {
+                if ('navigate' in client && 'focus' in client) {
+                    return client.navigate(urlToOpen).then(() => client.focus());
+                }
+            }
+
+            // Otherwise open a new window
             if (clients.openWindow) {
                 return clients.openWindow(urlToOpen);
             }
@@ -74,17 +95,44 @@ self.addEventListener('notificationclick', (event) => {
     );
 });
 
-// Handle push event as fallback (for custom push scenarios)
+// Handle notification close
+self.addEventListener('notificationclose', (event) => {
+    console.log('🔔 [FCM SW] Notification dismissed:', event.notification.data?.articleId);
+});
+
+// Handle push event (fallback for non-FCM pushes)
 self.addEventListener('push', (event) => {
-    if (event.data) {
-        try {
-            const data = event.data.json();
-            // FCM will handle this via onBackgroundMessage, but this is a fallback
-            console.log('🔔 [FCM SW] Push event data:', data);
-        } catch (e) {
-            console.log('🔔 [FCM SW] Push with text:', event.data.text());
-        }
+    console.log('🔔 [FCM SW] Push event received');
+
+    if (!event.data) {
+        console.log('🔔 [FCM SW] Push with no data');
+        return;
+    }
+
+    try {
+        const data = event.data.json();
+        console.log('🔔 [FCM SW] Push data:', data);
+
+        // Only show notification if FCM didn't handle it
+        // (This is a fallback for edge cases)
+    } catch (e) {
+        console.log('🔔 [FCM SW] Push text:', event.data.text());
     }
 });
 
-console.log('🔔 [FCM SW] Firebase Messaging Service Worker loaded');
+// Service worker install event
+self.addEventListener('install', (event) => {
+    console.log('🔔 [FCM SW] Service Worker installing...');
+    // Take over immediately
+    self.skipWaiting();
+});
+
+// Service worker activate event
+self.addEventListener('activate', (event) => {
+    console.log('🔔 [FCM SW] Service Worker activated!');
+    // Claim all clients immediately
+    event.waitUntil(clients.claim());
+});
+
+// Log confirmation
+console.log('🔔 [FCM SW] Divine Level Service Worker loaded and ready!');

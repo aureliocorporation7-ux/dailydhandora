@@ -89,4 +89,33 @@ async function getBotSettings() {
     };
 }
 
-module.exports = { db, checkDuplicate, saveDocument, getBotSettings, admin };
+/**
+ * 🧠 GOD-LEVEL: Fetches recent headlines for AI duplicate detection.
+ * Used to pass headline context to AI so it can semantically detect duplicates.
+ * @param {number} hours - Time window in hours (default 6)
+ * @param {number} limit - Max headlines to fetch (default 20)
+ * @returns {Promise<string[]>} - Array of recent headline strings
+ */
+async function getRecentHeadlines(hours = 6, limit = 20) {
+    try {
+        const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+        const snapshot = await db.collection('articles')
+            .where('createdAt', '>', cutoff)
+            .orderBy('createdAt', 'desc')
+            .limit(limit)
+            .get();
+
+        const headlines = snapshot.docs
+            .map(doc => doc.data().headline)
+            .filter(h => h); // Filter out any null/undefined
+
+        console.log(`     📋 [DB] Fetched ${headlines.length} recent headlines for duplicate check`);
+        return headlines;
+    } catch (error) {
+        console.error(`     ⚠️ [DB] Failed to fetch recent headlines: ${error.message}`);
+        return []; // Return empty array on error - AI will just write without duplicate context
+    }
+}
+
+module.exports = { db, checkDuplicate, saveDocument, getBotSettings, getRecentHeadlines, admin };
+

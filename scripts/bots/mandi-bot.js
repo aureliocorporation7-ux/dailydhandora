@@ -4,6 +4,7 @@ const aiWriter = require('../services/ai-writer');
 const imageGen = require('../services/image-gen');
 const newsCardGen = require('../services/news-card-gen');
 const dbService = require('../services/db-service');
+const topicCache = require('../services/topic-cache');
 const { getCategoryFallback } = require('../../lib/stockImages');
 const { getReadableDate } = require('../../lib/dateUtils');
 const { getPrompt, fillTemplate } = require('../services/prompt-service');
@@ -152,6 +153,10 @@ async function processRawMandiData(rawHeadline, rawBody, sourceUrl, settings, en
     }
 
     await dbService.saveDocument('articles', articleData);
+
+    // 📝 GOD-LEVEL: Log to Topic Cache (Cross-bot duplicate prevention)
+    await topicCache.logTopic(aiData.headline, 'mandi-bot');
+
     console.log(`     ✅ [Mandi Bot] Saved External Mandi Update: ${aiData.headline}`);
     return true;
 }

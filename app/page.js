@@ -33,14 +33,30 @@ async function getArticles() {
   }
 }
 
+async function getPublicSettings() {
+  try {
+    const doc = await db.collection('settings').doc('global').get();
+    return {
+      showViewCounts: doc.exists ? (doc.data().showViewCounts !== false) : true
+    };
+  } catch (error) {
+    console.error('Error fetching settings:', error);
+    return { showViewCounts: true }; // Default to showing views
+  }
+}
+
 export default async function Home() {
-  const articles = await getArticles();
+  const [articles, settings] = await Promise.all([
+    getArticles(),
+    getPublicSettings()
+  ]);
+
   return (
     <div className="bg-[#0a0a0a] text-white" suppressHydrationWarning={true}>
       <main className="max-w-7xl mx-auto px-4 py-8">
 
         {/* 🔥 Trending Section */}
-        <TrendingSection articles={articles} />
+        <TrendingSection articles={articles} showViewCounts={settings.showViewCounts} />
 
         {/* ताज़ा समाचार Grid */}
         <h2 className="text-2xl font-bold mb-6 text-primary border-l-4 border-primary pl-3">ताज़ा समाचार</h2>

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase-client';
 import {
@@ -36,12 +36,23 @@ import QuickActions from '../components/QuickActions';
 import ActivityFeed from '../components/ActivityFeed';
 import GoogleAdsSettings from '../components/GoogleAdsSettings';
 
-export default function Dashboard() {
+function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeView, setActiveView] = useState('content'); // 'content' | 'ai-settings'
+
+  // Sync view state from URL
+  useEffect(() => {
+    const view = searchParams.get('view');
+    if (view && ['content', 'ai-settings'].includes(view)) {
+      setActiveView(view);
+    }
+  }, [searchParams]);
+
   const [mode, setMode] = useState('loading');
   const [imageGen, setImageGen] = useState(true);
   const [audioGen, setAudioGen] = useState(true);
+  const [showViews, setShowViews] = useState(true);
   const [articles, setArticles] = useState([]);
   const [filter, setFilter] = useState('draft');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -85,6 +96,7 @@ export default function Dashboard() {
       setMode(data.botMode);
       setImageGen(data.imageGenEnabled);
       setAudioGen(data.enableAudioGen);
+      setShowViews(data.showViewCounts !== false);
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -176,6 +188,21 @@ export default function Dashboard() {
       });
     } catch (error) {
       setAudioGen(!newState);
+      alert('Failed to update settings');
+    }
+  };
+
+  const toggleShowViews = async () => {
+    const newState = !showViews;
+    setShowViews(newState);
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showViewCounts: newState }),
+      });
+    } catch (error) {
+      setShowViews(!newState);
       alert('Failed to update settings');
     }
   };
@@ -344,8 +371,9 @@ export default function Dashboard() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed top-0 left-0 h-full w-72 bg-slate-900/95 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-6 border-b border-white/10">
+      <aside className={`fixed top-0 left-0 h-full w-72 bg-slate-900/95 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
+        {/* Header - Fixed */}
+        <div className="p-6 border-b border-white/10 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getModeColor()} flex items-center justify-center text-xl shadow-lg`}>
@@ -356,49 +384,76 @@ export default function Dashboard() {
                 <p className="text-xs text-slate-400">Command Center</p>
               </div>
             </div>
-            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+              aria-label="Close menu"
+            >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        <nav className="p-4 space-y-2">
+        {/* Navigation - Scrollable with Custom Scrollbar */}
+        <nav className="p-4 space-y-2 flex-1 overflow-y-auto dark-scrollbar">
+          {/* Navigation Section */}
+          <p className="px-4 text-xs text-slate-500 uppercase tracking-wider mb-2">Navigation</p>
+
           <button
-            onClick={() => setActiveView('content')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeView === 'content' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            onClick={() => { setActiveView('content'); setSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-medium transition-all ${activeView === 'content' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            aria-label="Content management"
           >
             <LayoutDashboard size={20} />
             Content
           </button>
 
           <button
-            onClick={() => setActiveView('ai-settings')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${activeView === 'ai-settings' ? 'bg-purple-500/10 text-purple-400' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            onClick={() => { setActiveView('ai-settings'); setSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-medium transition-all ${activeView === 'ai-settings' ? 'bg-purple-500/10 text-purple-400' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            aria-label="AI Brain settings"
           >
             <Brain size={20} />
             AI Brain
           </button>
 
-          <Link href="/admin/analytics" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all">
-            <BarChart3 size={20} />
+          <Link
+            href="/admin/analytics"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all group"
+          >
+            <BarChart3 size={20} className="group-hover:scale-110 transition-transform" />
             Analytics
           </Link>
+
+          <Link
+            href="/admin/intelligence"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 px-4 py-3.5 hover:bg-emerald-500/10 rounded-xl text-slate-400 hover:text-emerald-400 transition-all group"
+          >
+            <span className="text-lg group-hover:scale-110 transition-transform">🏛️</span>
+            <span>Business Intel</span>
+            <span className="ml-auto bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse">NEW</span>
+          </Link>
+
+          {/* Controls Section */}
           <div className="pt-4 border-t border-white/10 mt-4">
             <p className="px-4 text-xs text-slate-500 uppercase tracking-wider mb-3">Controls</p>
 
             {/* Bot Mode */}
             <div className="px-4 mb-4">
               <p className="text-xs text-slate-400 mb-2">Bot Mode</p>
-              <div className="flex bg-slate-800/50 rounded-lg p-1">
+              <div className="flex bg-slate-800/50 rounded-lg p-1 gap-1">
                 {['auto', 'manual', 'off'].map(m => (
                   <button
                     key={m}
                     onClick={() => updateMode(m)}
-                    className={`flex-1 py-2 text-xs font-bold uppercase rounded-md transition-all ${mode === m
-                      ? m === 'auto' ? 'bg-green-600 text-white'
-                        : m === 'manual' ? 'bg-yellow-500 text-black'
-                          : 'bg-red-600 text-white'
-                      : 'text-slate-400 hover:text-white'
+                    aria-label={`Set bot mode to ${m}`}
+                    className={`flex-1 py-2.5 text-xs font-bold uppercase rounded-md transition-all ${mode === m
+                      ? m === 'auto' ? 'bg-green-600 text-white shadow-lg shadow-green-600/20'
+                        : m === 'manual' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/20'
+                          : 'bg-red-600 text-white shadow-lg shadow-red-600/20'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                       }`}
                   >
                     {m}
@@ -407,31 +462,58 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Toggles */}
-            <button onClick={toggleImageGen} className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 rounded-xl transition-all">
+            {/* Toggles - Larger Touch Targets */}
+            <button
+              onClick={toggleImageGen}
+              className="w-full flex items-center justify-between px-4 py-4 hover:bg-white/5 rounded-xl transition-all active:scale-[0.98]"
+              aria-label={`Toggle image generation ${imageGen ? 'off' : 'on'}`}
+            >
               <span className="flex items-center gap-3 text-slate-400">
                 <ImageIcon size={18} />
                 Image Gen
               </span>
-              <div className={`w-10 h-5 rounded-full p-0.5 transition-colors ${imageGen ? 'bg-blue-500' : 'bg-slate-700'}`}>
-                <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${imageGen ? 'translate-x-5' : 'translate-x-0'}`} />
+              <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${imageGen ? 'bg-blue-500' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${imageGen ? 'translate-x-6' : 'translate-x-0'}`} />
               </div>
             </button>
 
-            <button onClick={toggleAudioGen} className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 rounded-xl transition-all">
+            <button
+              onClick={toggleAudioGen}
+              className="w-full flex items-center justify-between px-4 py-4 hover:bg-white/5 rounded-xl transition-all active:scale-[0.98]"
+              aria-label={`Toggle audio generation ${audioGen ? 'off' : 'on'}`}
+            >
               <span className="flex items-center gap-3 text-slate-400">
                 <Mic size={18} />
                 Audio Gen
               </span>
-              <div className={`w-10 h-5 rounded-full p-0.5 transition-colors ${audioGen ? 'bg-purple-500' : 'bg-slate-700'}`}>
-                <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${audioGen ? 'translate-x-5' : 'translate-x-0'}`} />
+              <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${audioGen ? 'bg-purple-500' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${audioGen ? 'translate-x-6' : 'translate-x-0'}`} />
+              </div>
+            </button>
+
+            <button
+              onClick={toggleShowViews}
+              className="w-full flex items-center justify-between px-4 py-4 hover:bg-white/5 rounded-xl transition-all active:scale-[0.98]"
+              aria-label={`Toggle show views ${showViews ? 'off' : 'on'}`}
+            >
+              <span className="flex items-center gap-3 text-slate-400">
+                <Eye size={18} />
+                Show Views
+              </span>
+              <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${showViews ? 'bg-orange-500' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${showViews ? 'translate-x-6' : 'translate-x-0'}`} />
               </div>
             </button>
           </div>
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
-          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all font-medium">
+        {/* Footer - Fixed */}
+        <div className="p-4 border-t border-white/10 shrink-0">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all font-medium active:scale-[0.98]"
+            aria-label="Logout from admin panel"
+          >
             <LogOut size={18} />
             Logout
           </button>
@@ -444,7 +526,11 @@ export default function Dashboard() {
         <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/5">
           <div className="flex items-center justify-between px-6 h-16">
             <div className="flex items-center gap-4">
-              <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-400 hover:text-white">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 -ml-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                aria-label="Open menu"
+              >
                 <Menu size={24} />
               </button>
               <h2 className="text-lg font-semibold hidden sm:block">Dashboard</h2>
@@ -778,5 +864,13 @@ export default function Dashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense>
+      <DashboardContent />
+    </Suspense>
   );
 }

@@ -61,8 +61,8 @@ export default function AnalyticsDashboard() {
             )}
 
             {/* Sidebar */}
-            <aside className={`fixed top-0 left-0 h-full w-72 bg-slate-900/95 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                <div className="p-6 border-b border-white/10">
+            <aside className={`fixed top-0 left-0 h-full w-72 bg-slate-900/95 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
+                <div className="p-6 border-b border-white/10 shrink-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-violet-600 flex items-center justify-center text-xl shadow-lg">
@@ -73,39 +73,67 @@ export default function AnalyticsDashboard() {
                                 <p className="text-xs text-slate-400">Analytics</p>
                             </div>
                         </div>
-                        <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
+                        <button
+                            onClick={() => setSidebarOpen(false)}
+                            className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                            aria-label="Close menu"
+                        >
                             <X size={20} />
                         </button>
                     </div>
                 </div>
 
-                <nav className="p-4 space-y-2">
-                    <Link href="/admin/dashboard" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all">
+                <nav className="p-4 space-y-2 flex-1 overflow-y-auto dark-scrollbar">
+                    <p className="px-4 text-xs text-slate-500 uppercase tracking-wider mb-2">Navigation</p>
+
+                    <Link
+                        href="/admin/dashboard?view=content"
+                        onClick={() => setSidebarOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all"
+                    >
                         <LayoutDashboard size={20} />
                         Content
                     </Link>
 
-                    <Link href="/admin/dashboard" className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all">
+                    <Link
+                        href="/admin/dashboard?view=ai-settings"
+                        onClick={() => setSidebarOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-purple-500/10 rounded-xl text-slate-400 hover:text-purple-400 transition-all"
+                    >
                         <span className="text-lg">🧠</span>
                         <span>AI Brain</span>
                     </Link>
 
-                    <Link href="/admin/analytics" className="flex items-center gap-3 px-4 py-3 bg-white/10 rounded-xl text-white font-medium">
+                    <Link href="/admin/analytics" className="flex items-center gap-3 px-4 py-3.5 bg-white/10 rounded-xl text-white font-medium">
                         <BarChart3 size={20} />
                         Analytics
                     </Link>
 
+                    <Link
+                        href="/admin/intelligence"
+                        onClick={() => setSidebarOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-emerald-500/10 rounded-xl text-slate-400 hover:text-emerald-400 transition-all group"
+                    >
+                        <span className="text-lg group-hover:scale-110 transition-transform">🏛️</span>
+                        <span>Business Intel</span>
+                        <span className="ml-auto bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-bold animate-pulse">NEW</span>
+                    </Link>
+
                     <div className="pt-4 border-t border-white/10 mt-4">
                         <p className="px-4 text-xs text-slate-500 uppercase tracking-wider mb-3">Quick Info</p>
-                        <div className="px-4 py-2 bg-slate-800/30 rounded-xl text-xs text-slate-400">
+                        <div className="px-4 py-3 bg-slate-800/30 rounded-xl text-xs text-slate-400 space-y-1">
                             <p>📊 View detailed stats</p>
-                            <p className="mt-1">🔥 Top performing articles</p>
+                            <p>🔥 Top performing articles</p>
                         </div>
                     </div>
                 </nav>
 
-                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
-                    <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all font-medium">
+                <div className="p-4 border-t border-white/10 shrink-0">
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all font-medium active:scale-[0.98]"
+                        aria-label="Logout"
+                    >
                         <LogOut size={18} />
                         Logout
                     </button>
@@ -118,7 +146,11 @@ export default function AnalyticsDashboard() {
                 <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/5">
                     <div className="flex items-center justify-between px-6 h-16">
                         <div className="flex items-center gap-4">
-                            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-400 hover:text-white">
+                            <button
+                                onClick={() => setSidebarOpen(true)}
+                                className="lg:hidden p-2 -ml-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                                aria-label="Open menu"
+                            >
                                 <Menu size={24} />
                             </button>
                             <div>

@@ -14,7 +14,8 @@ export async function GET() {
         imageGenEnabled: docData.imageGenEnabled !== false,
         enableAudioGen: docData.enableAudioGen !== false,
         googleAdsId: docData.googleAdsId || '', // Google AdSense Publisher ID
-        googleAdsEnabled: docData.googleAdsEnabled || false
+        googleAdsEnabled: docData.googleAdsEnabled || false,
+        showViewCounts: docData.showViewCounts !== false // Default true - show views on trending
       };
     }
     return NextResponse.json(data);
@@ -50,6 +51,11 @@ export async function POST(request) {
     }
     if (typeof body.googleAdsEnabled !== 'undefined') {
       updateData.googleAdsEnabled = body.googleAdsEnabled;
+    }
+
+    // Show View Counts toggle
+    if (typeof body.showViewCounts !== 'undefined') {
+      updateData.showViewCounts = body.showViewCounts;
     }
 
     await db.collection('settings').doc('global').set(updateData, { merge: true });

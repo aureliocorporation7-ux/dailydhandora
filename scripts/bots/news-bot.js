@@ -11,6 +11,7 @@ const { isFresh } = require('../../lib/dateUtils');
 const { getPrompt, fillTemplate } = require('../services/prompt-service');
 const gistSelector = require('../services/gist-selector');
 const { notifyNewArticle } = require('../services/push-notification');
+const topicCache = require('../services/topic-cache');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -314,6 +315,13 @@ async function fetchBhaskarNews(settings) {
         console.log(`\n  🌾 [News Bot] PHASE 2: Processing ${mandiArticles.length} Mandi articles...`);
 
         for (const article of mandiArticles) {
+            // 🔍 GOD-LEVEL DUPLICATE CHECK: Topic Cache for Mandi
+            const { isDuplicate: isMandiDup, originalSource: mandiSrc } = await topicCache.checkRecentTopic(article.headline, 'mandi-bot', 6);
+            if (isMandiDup) {
+                console.log(`     ⏭️ [Mandi] DUPLICATE BLOCKED: Similar headline already posted by ${mandiSrc}. Skipping.`);
+                continue;
+            }
+
             console.log(`\n  🌾 [News Bot] DETECTED MANDI NEWS (Strict Check Passed)`);
 
             // Generate Enforced Date (Today's Date in IST)
@@ -352,6 +360,13 @@ async function fetchBhaskarNews(settings) {
 
             // Process selected diverse articles
             for (const article of diverseArticles) {
+                // 🔍 GOD-LEVEL DUPLICATE CHECK: Topic Cache before processing
+                const { isDuplicate: isTopicDup, originalSource: topicSrc } = await topicCache.checkRecentTopic(article.headline, 'news-bot', 6);
+                if (isTopicDup) {
+                    console.log(`     ⏭️ [News Bot] DUPLICATE BLOCKED: Similar headline already posted by ${topicSrc}. Skipping.`);
+                    continue;
+                }
+
                 console.log(`\n  ✨ [Bhaskar] GIST SELECTED: ${article.headline}`);
                 const success = await processAndSave(article.headline, article.body, article.sourceUrl, 'Dainik Bhaskar', settings);
                 if (success) processedCount++;
@@ -460,43 +475,60 @@ async function fetchPatrikaNews(settings) {
 // 3. COMMON PROCESSING (AI + DB)
 // ========================================== 
 async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, settings) {
-    // 🧠 DYNAMIC PROMPT (Hybrid: DB > Code) with AI Category Verification
+    // 🧠 GOD-LEVEL: Fetch recent headlines for AI duplicate detection
+    const recentHeadlines = await dbService.getRecentHeadlines(6, 20);
+    const headlinesList = recentHeadlines.length > 0
+        ? recentHeadlines.map((h, i) => `${i + 1}. ${h}`).join('\n')
+        : '(No recent articles in last 6 hours)';
+
+    // 🧠 DYNAMIC PROMPT (Hybrid: DB > Code) with AI Duplicate Check + Category Verification
     const DEFAULT_USER_PROMPT = `
     ROLE: Senior Editor for DailyDhandora (Nagaur's trusted news portal).
+    
+    **TASK 0: DUPLICATE CHECK (CRITICAL - DO THIS FIRST)**
+    Here are headlines published in the last 6 hours:
+    {{recentHeadlines}}
+    
+    Is the NEW article below about the SAME EVENT as ANY headline above?
+    SAME EVENT means: Same location + Same incident (even if words differ)
+    Examples of duplicates:
+    - "भिड़ंत में 3 की मौत" = "टक्कर में 3 लोगों की दर्दनाक मृत्यु" (same accident)
+    - "मकराना में चोरी" = "मकराना ज्वेलर से सोना-चांदी चोरी" (same theft)
+    - "डीडवाना में पिकअप पलटी" = "डीडवाना हादसे में छात्रों की पिकअप पलटी" (same accident)
+    
+    If DUPLICATE: Return isUnique=false, duplicateOf="matching headline"
+    If NEW/UNIQUE: Return isUnique=true, duplicateOf=null, then write article.
     
     SOURCE:
     Headline: {{headline}}
     Raw Text: {{body}}
     Source: {{sourceName}}
     
-    TASK: Write Hindi news report AND classify into correct category.
-    
-    GUIDELINES:
+    **TASK 1: WRITE** (Only if isUnique=true)
     1. **Headline**: Click-worthy, <15 words, Hindi.
     2. **Content**: 300-500 words, HTML (<p>, <ul>, <li>, <h3>).
     3. **Rules**: No rival mentions (Bhaskar/Patrika). Use "हमारे [Tehsil] संवाददाता".
     
-    4. **Category**: Pick EXACTLY one from this table:
-    
-    | Category | Use When (Examples) |
-    |----------|---------------------|
-    | "मंडी भाव" | Crop rates, Mandi prices (Sarso, Moong, Chana, Gehu prices) |
-    | "नागौर न्यूज़" | Local news, Accidents, Events, Crime, Weather, Politics |
-    | "शिक्षा विभाग" | Teachers: Transfer, Salary, DA, Promotion, Seniority |
-    | "सरकारी योजना" | Government schemes, Subsidies, Benefits, Welfare |
-    | "भर्ती व रिजल्ट" | Jobs: Vacancy, Result, Admit Card, Exam, Recruitment |
-    
-    ⚠️ IMPORTANT: Use EXACT Hindi category name from table. No variations!
+    **TASK 2: CATEGORY** (Pick EXACTLY one):
+    | Category | Use When |
+    |----------|----------|
+    | "मंडी भाव" | Crop rates, Mandi prices (₹/quintal) |
+    | "नागौर न्यूज़" | Local news, Accidents, Crime, Weather |
+    | "शिक्षा विभाग" | Teachers: Transfer, Salary, Promotion |
+    | "सरकारी योजना" | Government schemes, Subsidies |
+    | "भर्ती व रिजल्ट" | Jobs: Vacancy, Result, Admit Card |
     
     OUTPUT FORMAT (JSON only):
     {
-      "headline": "Hindi headline here",
-      "content": "<p>...</p>",
+      "isUnique": true/false,
+      "duplicateOf": null or "matching headline from list",
+      "headline": "Hindi headline (only if isUnique=true)",
+      "content": "<p>...</p> (only if isUnique=true)",
       "tags": ["Nagaur", "Rajasthan"],
       "category": "नागौर न्यूज़"
     }
     
-    ⚠️ STRICT: "मंडी भाव" is ONLY for crop market prices with ₹/quintal rates. NOT for melas, fairs, elections, or general news!
+    ⚠️ STRICT: "मंडी भाव" is ONLY for crop market prices with ₹/quintal rates!
     `;
 
 
@@ -504,12 +536,26 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
     const promptContent = fillTemplate(rawPrompt, {
         headline: rawHeadline,
         body: rawBody.substring(0, 3000),
-        sourceName: sourceName
+        sourceName: sourceName,
+        recentHeadlines: headlinesList
     });
 
     const aiData = await aiWriter.writeArticle(promptContent);
-    if (!aiData || !aiData.headline) {
+    if (!aiData) {
         console.log("     ❌ [News Bot] AI Writing failed.");
+        return false;
+    }
+
+    // 🧠 GOD-LEVEL: AI Duplicate Detection - Early Exit
+    if (aiData.isUnique === false) {
+        console.log(`     🚫 [News Bot] DUPLICATE DETECTED BY AI!`);
+        console.log(`        New: "${rawHeadline.substring(0, 50)}..."`);
+        console.log(`        Match: "${aiData.duplicateOf || 'Unknown'}"`);
+        return false; // Early exit - no image gen, no save, no audio!
+    }
+
+    if (!aiData.headline) {
+        console.log("     ❌ [News Bot] AI returned no headline.");
         return false;
     }
 
@@ -629,6 +675,9 @@ async function processAndSave(rawHeadline, rawBody, sourceUrl, sourceName, setti
     const savedId = await dbService.saveDocument('articles', articleData);
     if (savedId) {
         console.log(`     ✅ [News Bot] SAVED: ${cleanHeadline} (ID: ${savedId})`);
+
+        // 📝 GOD-LEVEL: Log to Topic Cache (Cross-bot duplicate prevention)
+        await topicCache.logTopic(cleanHeadline, 'news-bot');
 
         // 🎙️ GENERATE AUDIO (ElevenLabs + Cloudinary)
         // Now using the "Build-Safe" implementation with shared Firebase connection

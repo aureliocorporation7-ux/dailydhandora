@@ -10,8 +10,11 @@ import { Flame, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
  * 
  * Shows top viewed articles from last 24 hours
  * Horizontal scrollable cards with fire emoji
+ * 
+ * @param {Object[]} articles - Array of article objects
+ * @param {boolean} showViewCounts - Whether to show view counts (from admin settings)
  */
-export default function TrendingSection({ articles = [] }) {
+export default function TrendingSection({ articles = [], showViewCounts = true }) {
     const scrollContainerRef = useRef(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
@@ -74,8 +77,8 @@ export default function TrendingSection({ articles = [] }) {
                         onClick={() => scroll('left')}
                         disabled={!canScrollLeft}
                         className={`p-2 rounded-full bg-neutral-800 transition-all ${canScrollLeft
-                                ? 'hover:bg-neutral-700 text-white'
-                                : 'opacity-50 cursor-not-allowed text-gray-500'
+                            ? 'hover:bg-neutral-700 text-white'
+                            : 'opacity-50 cursor-not-allowed text-gray-500'
                             }`}
                     >
                         <ChevronLeft className="w-5 h-5" />
@@ -84,8 +87,8 @@ export default function TrendingSection({ articles = [] }) {
                         onClick={() => scroll('right')}
                         disabled={!canScrollRight}
                         className={`p-2 rounded-full bg-neutral-800 transition-all ${canScrollRight
-                                ? 'hover:bg-neutral-700 text-white'
-                                : 'opacity-50 cursor-not-allowed text-gray-500'
+                            ? 'hover:bg-neutral-700 text-white'
+                            : 'opacity-50 cursor-not-allowed text-gray-500'
                             }`}
                     >
                         <ChevronRight className="w-5 h-5" />
@@ -120,11 +123,13 @@ export default function TrendingSection({ articles = [] }) {
                                     <Flame className="w-3 h-3 text-orange-500" />
                                     <span className="text-xs font-bold text-white">#{index + 1}</span>
                                 </div>
-                                {/* Views Badge */}
-                                <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full">
-                                    <Eye className="w-3 h-3 text-gray-400" />
-                                    <span className="text-xs text-gray-300">{article.views || 0}</span>
-                                </div>
+                                {/* Views Badge - Only show if admin toggle is ON */}
+                                {showViewCounts && (
+                                    <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full">
+                                        <Eye className="w-3 h-3 text-gray-400" />
+                                        <span className="text-xs text-gray-300">{article.views || 0}</span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Content */}

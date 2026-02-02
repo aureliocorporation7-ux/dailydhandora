@@ -3,19 +3,12 @@ import { cookies } from 'next/headers';
 import { admin, db } from '@/lib/firebase';
 
 /**
- * POST /api/notifications/send
+ * 🎯 NOTIFICATION SEND API - Auto-Targeting Edition
  * 
- * Send push notification to all subscribed devices.
- * Protected: Admin only (requires admin_session cookie).
- * 
- * Body: {
- *   title: string,
- *   body: string,
- *   image?: string,
- *   url?: string,
- *   articleId?: string
- * }
+ * Send push notifications to all or targeted devices.
+ * NEW: Supports category filtering for auto-targeting.
  */
+
 export async function POST(request) {
     try {
         // Check admin authentication
@@ -23,31 +16,47 @@ export async function POST(request) {
         const adminSession = cookieStore.get('admin_session');
 
         if (!adminSession || adminSession.value !== 'authenticated') {
-            return NextResponse.json(
-                { error: 'Unauthorized - Admin access required' },
-                { status: 401 }
-            );
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const body = await request.json();
-        const { title, body: notificationBody, image, url, articleId } = body;
+        const { title, body: notificationBody, image, url, articleId, targetCategory } = body;
 
         if (!title || !notificationBody) {
-            return NextResponse.json(
-                { error: 'Title and body are required' },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: 'Title and body are required' }, { status: 400 });
         }
 
-        // Fetch all active FCM tokens
-        const tokensSnapshot = await db.collection('fcmTokens')
-            .where('active', '==', true)
-            .get();
+        // Build query for tokens
+        let tokensQuery = db.collection('fcmTokens').where('active', '==', true);
+
+        // 🎯 CATEGORY TARGETING - Filter by category if specified
+        let tokensSnapshot;
+        if (targetCategory) {
+            // Get all active tokens first
+            tokensSnapshot = await tokensQuery.get();
+
+            // Filter tokens that have this category in their preferences
+            const filteredDocs = tokensSnapshot.docs.filter(doc => {
+                const data = doc.data();
+                const categories = data.categories || [];
+                // Include if user has this category OR has no categories (send to all)
+                return categories.length === 0 || categories.includes(targetCategory);
+            });
+
+            console.log(`🎯 [Send] Category targeting: "${targetCategory}"`);
+            console.log(`🎯 [Send] Filtered ${filteredDocs.length}/${tokensSnapshot.size} devices`);
+
+            tokensSnapshot = { docs: filteredDocs, size: filteredDocs.length, empty: filteredDocs.length === 0 };
+        } else {
+            tokensSnapshot = await tokensQuery.get();
+        }
 
         if (tokensSnapshot.empty) {
             return NextResponse.json({
                 success: false,
-                message: 'No subscribed devices found',
+                message: targetCategory
+                    ? `No devices subscribed to "${targetCategory}"`
+                    : 'No subscribed devices found',
                 sentCount: 0
             });
         }
@@ -67,6 +76,7 @@ export async function POST(request) {
                 body: notificationBody,
                 url: url || '/',
                 articleId: articleId || '',
+                category: targetCategory || '',
                 timestamp: Date.now().toString()
             },
             webpush: {
@@ -78,12 +88,12 @@ export async function POST(request) {
                     badge: '/icons/badge-72x72.png',
                     vibrate: [200, 100, 200],
                     requireInteraction: true,
-                    tag: articleId || 'general'
+                    tag: articleId || targetCategory || 'general'
                 }
             }
         };
 
-        // Send to all tokens using sendEachForMulticast
+        // Send to all tokens
         const response = await admin.messaging().sendEachForMulticast({
             tokens,
             ...message
@@ -96,7 +106,6 @@ export async function POST(request) {
         response.responses.forEach((resp, idx) => {
             if (!resp.success) {
                 const errorCode = resp.error?.code;
-                // Remove tokens with permanent errors
                 if (errorCode === 'messaging/registration-token-not-registered' ||
                     errorCode === 'messaging/invalid-registration-token') {
                     tokensToRemove.push(tokens[idx]);
@@ -104,7 +113,6 @@ export async function POST(request) {
             }
         });
 
-        // Batch delete invalid tokens
         if (tokensToRemove.length > 0) {
             const batch = db.batch();
             tokensToRemove.forEach(token => {
@@ -116,25 +124,24 @@ export async function POST(request) {
 
         return NextResponse.json({
             success: true,
-            message: `Notification sent to ${response.successCount} devices`,
+            message: targetCategory
+                ? `Notification sent to ${response.successCount} "${targetCategory}" subscribers`
+                : `Notification sent to ${response.successCount} devices`,
             sentCount: response.successCount,
             failedCount: response.failureCount,
-            cleanedTokens: tokensToRemove.length
+            cleanedTokens: tokensToRemove.length,
+            targetCategory: targetCategory || 'all'
         });
 
     } catch (error) {
         console.error('❌ [Send] Error:', error);
-        return NextResponse.json(
-            { error: 'Failed to send notification', details: error.message },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to send notification', details: error.message }, { status: 500 });
     }
 }
 
 /**
  * GET /api/notifications/send
- * 
- * Get count of subscribed devices (Admin only).
+ * Get subscriber counts (with optional category breakdown)
  */
 export async function GET(request) {
     try {
@@ -142,25 +149,34 @@ export async function GET(request) {
         const adminSession = cookieStore.get('admin_session');
 
         if (!adminSession || adminSession.value !== 'authenticated') {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            );
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
         const tokensSnapshot = await db.collection('fcmTokens')
             .where('active', '==', true)
             .get();
 
+        // Build category breakdown
+        const categoryBreakdown = {};
+        tokensSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const categories = data.categories || [];
+            if (categories.length === 0) {
+                categoryBreakdown['all'] = (categoryBreakdown['all'] || 0) + 1;
+            } else {
+                categories.forEach(cat => {
+                    categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + 1;
+                });
+            }
+        });
+
         return NextResponse.json({
-            subscribedDevices: tokensSnapshot.size
+            subscribedDevices: tokensSnapshot.size,
+            categoryBreakdown
         });
 
     } catch (error) {
         console.error('❌ [Send GET] Error:', error);
-        return NextResponse.json(
-            { error: 'Failed to get subscriber count' },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: 'Failed to get stats' }, { status: 500 });
     }
 }

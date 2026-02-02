@@ -8,6 +8,7 @@ import AudioPlayer from '@/app/components/AudioPlayer';
 import ArticleActions from '@/app/components/ArticleActions';
 import ShareButtons from '@/app/components/ShareButtons';
 import ViewTracker from '@/app/components/ViewTracker';
+import DataTracker from '@/app/components/DataTracker';
 
 export const revalidate = 3600; // Revalidate every hour
 
@@ -154,6 +155,7 @@ export default async function ArticlePage({ params }) {
 
       <article className="max-w-4xl mx-auto px-4 py-12">
         <ViewTracker id={article.id} />
+        <DataTracker article={article} />
 
         {/* 🎨 CONDITIONAL LAYOUT LOGIC */}
         {isPosterMode ? (
@@ -213,7 +215,10 @@ export default async function ArticlePage({ params }) {
           <AudioPlayer text={article.content} audioUrl={article.audioUrl} />
         </div>
 
-        <ArticleMeta category={article.category} createdAt={article.createdAt} />
+        <ArticleMeta
+          category={article.category}
+          formattedDate={new Date(article.createdAt).toLocaleDateString('hi-IN', { year: 'numeric', month: 'long', day: 'numeric' })}
+        />
 
         <div className="prose prose-invert max-w-none prose-lg prose-headings:text-primary prose-a:text-blue-400 hover:prose-a:text-blue-300">
           <div dangerouslySetInnerHTML={{ __html: article.content }} />
@@ -304,6 +309,35 @@ export async function generateMetadata({ params }) {
 
   return {
     title: `${article.headline} - DailyDhandora`,
-    description: article.summary || article.headline,
+    description: article.summary || article.headline?.substring(0, 160),
+    openGraph: {
+      title: article.headline,
+      description: article.summary || article.headline?.substring(0, 160),
+      url: `https://dailydhandora.onrender.com/article/${article.id}`,
+      siteName: 'DailyDhandora',
+      images: [
+        {
+          url: article.imageUrl,
+          width: 1200,
+          height: 675,
+          alt: article.headline,
+        },
+      ],
+      locale: 'hi_IN',
+      type: 'article',
+      publishedTime: article.createdAt,
+      modifiedTime: article.updatedAt || article.createdAt,
+      section: article.category,
+      authors: ['Abhishek'],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: article.headline,
+      description: article.summary || article.headline?.substring(0, 160),
+      images: [article.imageUrl],
+    },
+    alternates: {
+      canonical: `https://dailydhandora.onrender.com/article/${article.id}`,
+    },
   };
 }
