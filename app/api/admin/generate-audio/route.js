@@ -23,9 +23,12 @@ export async function POST(req) {
         }
 
         console.log(`[API] ✅ Audio Gen enabled. Generating for ${articleId}...`);
+        console.log(`[API] ⚙️ Settings: Paid Audio enabled: ${settings.enablePaidAudio !== false}`);
 
-        // Call the service (which handles Cloudinary + Firestore update)
-        const audioUrl = await generateAndStoreAudio(text, articleId);
+        // Call the service with settings (which handles Cloudinary + Firestore update)
+        const audioUrl = await generateAndStoreAudio(text, articleId, {
+            enablePaidAudio: settings.enablePaidAudio !== false // Default true
+        });
 
         if (!audioUrl) {
             return NextResponse.json({ error: 'Audio generation failed' }, { status: 500 });

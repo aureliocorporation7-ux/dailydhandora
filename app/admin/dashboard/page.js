@@ -51,7 +51,9 @@ function DashboardContent() {
 
   const [mode, setMode] = useState('loading');
   const [imageGen, setImageGen] = useState(true);
+  const [enableAIImages, setEnableAIImages] = useState(true);
   const [audioGen, setAudioGen] = useState(true);
+  const [enablePaidAudio, setEnablePaidAudio] = useState(true);
   const [showViews, setShowViews] = useState(true);
   const [articles, setArticles] = useState([]);
   const [filter, setFilter] = useState('draft');
@@ -95,7 +97,9 @@ function DashboardContent() {
       const data = await res.json();
       setMode(data.botMode);
       setImageGen(data.imageGenEnabled);
+      setEnableAIImages(data.enableAIImages !== false); // Default true
       setAudioGen(data.enableAudioGen);
+      setEnablePaidAudio(data.enablePaidAudio !== false); // Default true
       setShowViews(data.showViewCounts !== false);
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -188,6 +192,36 @@ function DashboardContent() {
       });
     } catch (error) {
       setAudioGen(!newState);
+      alert('Failed to update settings');
+    }
+  };
+
+  const toggleAIImages = async () => {
+    const newState = !enableAIImages;
+    setEnableAIImages(newState);
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enableAIImages: newState }),
+      });
+    } catch (error) {
+      setEnableAIImages(!newState);
+      alert('Failed to update settings');
+    }
+  };
+
+  const togglePaidAudio = async () => {
+    const newState = !enablePaidAudio;
+    setEnablePaidAudio(newState);
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enablePaidAudio: newState }),
+      });
+    } catch (error) {
+      setEnablePaidAudio(!newState);
       alert('Failed to update settings');
     }
   };
@@ -478,6 +512,20 @@ function DashboardContent() {
             </button>
 
             <button
+              onClick={toggleAIImages}
+              className="w-full flex items-center justify-between px-4 py-4 hover:bg-white/5 rounded-xl transition-all active:scale-[0.98]"
+              aria-label={`Toggle AI images ${enableAIImages ? 'off' : 'on'}`}
+            >
+              <span className="flex items-center gap-3 text-slate-400">
+                <Brain size={18} />
+                AI Images
+              </span>
+              <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${enableAIImages ? 'bg-indigo-500' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${enableAIImages ? 'translate-x-6' : 'translate-x-0'}`} />
+              </div>
+            </button>
+
+            <button
               onClick={toggleAudioGen}
               className="w-full flex items-center justify-between px-4 py-4 hover:bg-white/5 rounded-xl transition-all active:scale-[0.98]"
               aria-label={`Toggle audio generation ${audioGen ? 'off' : 'on'}`}
@@ -488,6 +536,20 @@ function DashboardContent() {
               </span>
               <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${audioGen ? 'bg-purple-500' : 'bg-slate-700'}`}>
                 <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${audioGen ? 'translate-x-6' : 'translate-x-0'}`} />
+              </div>
+            </button>
+
+            <button
+              onClick={togglePaidAudio}
+              className="w-full flex items-center justify-between px-4 py-4 hover:bg-white/5 rounded-xl transition-all active:scale-[0.98]"
+              aria-label={`Toggle paid audio ${enablePaidAudio ? 'off' : 'on'}`}
+            >
+              <span className="flex items-center gap-3 text-slate-400">
+                <Zap size={18} />
+                Paid Audio
+              </span>
+              <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${enablePaidAudio ? 'bg-yellow-500' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${enablePaidAudio ? 'translate-x-6' : 'translate-x-0'}`} />
               </div>
             </button>
 

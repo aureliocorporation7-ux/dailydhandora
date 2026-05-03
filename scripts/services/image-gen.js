@@ -107,9 +107,10 @@ async function getImageWithFallback(category, headline, imagePrompt, settings = 
 
     const stockLib = require('../../lib/stockImages');
 
-    // Priority 1: AI Generated Image
-    if (settings.enableImageGen && settings.enableAI && imagePrompt) {
-        console.log(`     🎨 [P1] Trying AI Image Generation...`);
+    // Priority 1: AI Generated Image (only if AI images are enabled)
+    const aiImagesEnabled = settings.enableAIImages !== false; // Default true
+    if (settings.enableImageGen && aiImagesEnabled && settings.enableAI && imagePrompt) {
+        console.log(`     🎨 [P1] Trying AI Image Generation (AI images enabled: ${aiImagesEnabled})...`);
         const aiImage = await generateImage(imagePrompt);
         if (aiImage) {
             console.log(`     ✅ [P1] AI Image Generated!`);
@@ -117,10 +118,13 @@ async function getImageWithFallback(category, headline, imagePrompt, settings = 
         }
         console.log(`     ⚠️ [P1] AI Generation failed, trying next...`);
     } else {
-        console.log(`     ⏭️ [P1] Skipped (AI disabled or no prompt)`);
+        const skipReason = !settings.enableImageGen ? 'imageGen disabled' :
+                          !aiImagesEnabled ? 'AI images disabled' :
+                          !settings.enableAI ? 'AI disabled' : 'no prompt';
+        console.log(`     ⏭️ [P1] Skipped (${skipReason})`);
     }
 
-    // Priority 2: Stock Image (if category has real images)
+    // Priority 2: Stock Image (if category has real images) - ALWAYS AVAILABLE
     if (stockLib.hasStockImages(category)) {
         console.log(`     📷 [P2] Using Stock Image for: ${category}`);
         const stockUrl = stockLib.getCategoryFallback(category);
@@ -128,7 +132,7 @@ async function getImageWithFallback(category, headline, imagePrompt, settings = 
     }
     console.log(`     ⚠️ [P2] No stock images for: ${category}`);
 
-    // Priority 3: Generate Card (for WhatsApp essentials)
+    // Priority 3: Generate Card (for WhatsApp essentials) - ALWAYS AVAILABLE
     if (stockLib.isWhatsAppEssential(category)) {
         console.log(`     🎴 [P3] Generating Card for WhatsApp (${category})...`);
         try {
@@ -161,7 +165,7 @@ async function getImageWithFallback(category, headline, imagePrompt, settings = 
         }
     }
 
-    // Final Fallback: Default stock image
+    // Final Fallback: Default stock image - ALWAYS AVAILABLE
     console.log(`     📷 [Fallback] Using default stock image`);
     return { url: stockLib.getCategoryFallback('default'), type: 'fallback' };
 }

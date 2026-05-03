@@ -5,14 +5,25 @@ import { db } from '@/lib/firebase';
 export async function GET() {
   try {
     const doc = await db.collection('settings').doc('global').get();
-    let data = { botMode: 'auto', imageGenEnabled: true };
+    let data = {
+      botMode: 'auto',
+      imageGenEnabled: true,
+      enableAIImages: true, // Default: AI images enabled
+      enableAudioGen: true,
+      enablePaidAudio: true, // Default: Paid audio (ElevenLabs) enabled
+      googleAdsId: '',
+      googleAdsEnabled: false,
+      showViewCounts: true
+    };
 
     if (doc.exists) {
       const docData = doc.data();
       data = {
         botMode: docData.botMode || 'auto',
         imageGenEnabled: docData.imageGenEnabled !== false,
+        enableAIImages: docData.enableAIImages !== false, // Default true
         enableAudioGen: docData.enableAudioGen !== false,
+        enablePaidAudio: docData.enablePaidAudio !== false, // Default true
         googleAdsId: docData.googleAdsId || '', // Google AdSense Publisher ID
         googleAdsEnabled: docData.googleAdsEnabled || false,
         showViewCounts: docData.showViewCounts !== false // Default true - show views on trending
@@ -41,8 +52,16 @@ export async function POST(request) {
       updateData.imageGenEnabled = body.imageGenEnabled;
     }
 
+    if (typeof body.enableAIImages !== 'undefined') {
+      updateData.enableAIImages = body.enableAIImages;
+    }
+
     if (typeof body.enableAudioGen !== 'undefined') {
       updateData.enableAudioGen = body.enableAudioGen;
+    }
+
+    if (typeof body.enablePaidAudio !== 'undefined') {
+      updateData.enablePaidAudio = body.enablePaidAudio;
     }
 
     // Google Ads settings

@@ -177,9 +177,11 @@ function getApiKeys() {
  * Uploads to Cloudinary, and updates Firestore.
  * @param {string} text - The text to convert to speech.
  * @param {string} articleId - The Firestore document ID of the article.
+ * @param {Object} settings - Optional settings object.
+ * @param {boolean} settings.enablePaidAudio - Whether paid audio (ElevenLabs) is enabled.
  * @returns {Promise<string|null>} - The Cloudinary audio URL or null on failure.
  */
-async function generateAndStoreAudio(text, articleId) {
+async function generateAndStoreAudio(text, articleId, settings = {}) {
     if (!text || !articleId) {
         console.error("❌ [AudioGen] Missing text or articleId.");
         return null;
@@ -208,13 +210,13 @@ async function generateAndStoreAudio(text, articleId) {
             return doc.data().audioUrl;
         }
 
-        // 2. PRIMARY: Try Gemini Native Audio
+        // 2. PRIMARY: Try Gemini Native Audio (ALWAYS AVAILABLE - free)
         let audioBuffer = await generateGeminiAudio(cleanText);
 
-        // 3. FALLBACK: ElevenLabs (If Gemini failed)
-        // 3. FALLBACK: ElevenLabs (If Gemini failed)
-        if (!audioBuffer) {
-            console.log(`⚠️ [AudioGen] Fallback: Switching to ElevenLabs...`);
+        // 3. FALLBACK: ElevenLabs (If Gemini failed AND paid audio is enabled)
+        const paidAudioEnabled = settings.enablePaidAudio !== false; // Default true
+        if (!audioBuffer && paidAudioEnabled) {
+            console.log(`⚠️ [AudioGen] Fallback: Switching to ElevenLabs (paid audio enabled: ${paidAudioEnabled})...`);
             let lastError = null;
 
             console.log(`🎙️ [AudioGen] Starting ElevenLabs Generation with ${apiKeys.length} available keys...`);
@@ -251,6 +253,8 @@ async function generateAndStoreAudio(text, articleId) {
                     // CONTINUE TO NEXT KEY...
                 }
             }
+        } else if (!audioBuffer && !paidAudioEnabled) {
+            console.log(`⏭️ [AudioGen] Paid audio disabled, skipping ElevenLabs fallback.`);
         }
 
         if (!audioBuffer) {
@@ -259,12 +263,12 @@ async function generateAndStoreAudio(text, articleId) {
         }
 
 
-        // 3. Upload to Cloudinary
+        // 4. Upload to Cloudinary
         console.log(`   --> Uploading to Cloudinary...`);
         const audioUrl = await uploadBuffer(audioBuffer, 'news_audio');
         if (!audioUrl) throw new Error("Cloudinary upload failed.");
 
-        // 4. Update Firestore
+        // 5. Update Firestore
         await docRef.update({
             audioUrl: audioUrl,
             audioGeneratedAt: admin.firestore.FieldValue.serverTimestamp()

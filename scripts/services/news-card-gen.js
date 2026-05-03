@@ -25,30 +25,66 @@ const POSSIBLE_PATHS = [
     '/app/scripts/services'                                 // Render scripts folder
 ];
 
-// Find the correct paths
+// 🗺️ Path resolution cache
+const PATH_RESOLUTION_CACHE = new Map();
+
+// Find the correct paths with caching
 function findPath(filename) {
+    // Check cache first
+    if (PATH_RESOLUTION_CACHE.has(filename)) {
+        const cachedPath = PATH_RESOLUTION_CACHE.get(filename);
+        if (fs.existsSync(cachedPath)) {
+            return cachedPath;
+        } else {
+            // Cached path no longer exists, remove from cache
+            PATH_RESOLUTION_CACHE.delete(filename);
+        }
+    }
+
     for (const basePath of POSSIBLE_PATHS) {
         const fullPath = path.join(basePath, filename);
         if (fs.existsSync(fullPath)) {
             console.log(`  ✅ [Card Gen] Found ${filename} at: ${fullPath}`);
+            // Cache the successful resolution
+            PATH_RESOLUTION_CACHE.set(filename, fullPath);
             return fullPath;
         }
     }
     // Default fallback to cwd
-    return path.join(process.cwd(), 'public', filename);
+    const fallbackPath = path.join(process.cwd(), 'public', filename);
+    PATH_RESOLUTION_CACHE.set(filename, fallbackPath);
+    return fallbackPath;
 }
 
+// 🏗️ Font caching with timestamp for freshness
 let DEVANAGARI_FONT_PATH = null;
 let LATIN_FONT_PATH = null;
 let LOGO_PATH = null;
-let DEVANAGARI_FONT_BUFFER = null; // Cache Devanagari font buffer for Satori
-let LATIN_FONT_BUFFER = null;       // Cache Latin font buffer for Satori
+let DEVANAGARI_FONT_BUFFER = null;
+let LATIN_FONT_BUFFER = null;
+let FONT_CACHE_LOADED_AT = null;
+const FONT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours cache
+const FONT_PATHS_RESOLVED = false;
 
 /**
  * 📥 Ensures both Hindi and Latin fonts exist locally and loads them into memory.
+ * Uses caching to avoid redundant file system operations.
  */
 async function ensureFont() {
-    // Find font paths if not set
+    const now = Date.now();
+    
+    // Check if fonts are already cached and still valid
+    if (DEVANAGARI_FONT_BUFFER && LATIN_FONT_BUFFER && FONT_CACHE_LOADED_AT) {
+        const cacheAge = now - FONT_CACHE_LOADED_AT;
+        if (cacheAge < FONT_CACHE_TTL_MS) {
+            console.log(`  ✅ [Card Gen] Using cached fonts (loaded ${Math.round(cacheAge / 1000)}s ago)`);
+            return;
+        } else {
+            console.log(`  🔄 [Card Gen] Font cache expired (${Math.round(cacheAge / 1000)}s old), reloading...`);
+        }
+    }
+
+    // Find font paths if not already resolved
     if (!DEVANAGARI_FONT_PATH) {
         DEVANAGARI_FONT_PATH = findPath(DEVANAGARI_FONT_FILENAME);
     }
@@ -59,7 +95,7 @@ async function ensureFont() {
         LOGO_PATH = findPath(LOGO_FILENAME);
     }
 
-    // Load Devanagari font
+    // Load Devanagari font with caching
     if (fs.existsSync(DEVANAGARI_FONT_PATH)) {
         console.log(`  ✅ [Card Gen] Devanagari font exists at: ${DEVANAGARI_FONT_PATH}`);
         if (!DEVANAGARI_FONT_BUFFER) {
@@ -82,7 +118,7 @@ async function ensureFont() {
         }
     }
 
-    // Load Latin font
+    // Load Latin font with caching
     if (fs.existsSync(LATIN_FONT_PATH)) {
         console.log(`  ✅ [Card Gen] Latin font exists at: ${LATIN_FONT_PATH}`);
         if (!LATIN_FONT_BUFFER) {
@@ -91,6 +127,12 @@ async function ensureFont() {
         }
     } else {
         console.warn("  ⚠️ [Card Gen] Latin font not found, English text may show boxes!");
+    }
+
+    // Update cache timestamp
+    if (DEVANAGARI_FONT_BUFFER || LATIN_FONT_BUFFER) {
+        FONT_CACHE_LOADED_AT = now;
+        console.log(`  ✅ [Card Gen] Font cache updated at ${new Date(now).toISOString()}`);
     }
 }
 

@@ -27,32 +27,115 @@ async function checkDuplicate(collectionName, field, value) {
 }
 
 /**
- * Saves a document to a collection.
+ * Saves a document to a collection with retry logic.
  * @param {string} collectionName - Collection to save to.
  * @param {Object} data - The data object.
  * @param {string} [docId] - Optional custom document ID.
+ * @param {Object} [options] - Additional options.
+ * @param {number} [options.maxRetries=3] - Maximum number of retry attempts.
+ * @param {number} [options.initialDelay=1000] - Initial delay between retries in ms.
  * @returns {Promise<string|null>} - The document ID or null on failure.
  */
-async function saveDocument(collectionName, data, docId = null) {
-    try {
-        // Add timestamps
-        const finalData = {
-            ...data,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        };
+async function saveDocument(collectionName, data, docId = null, options = {}) {
+    const maxRetries = options.maxRetries || 3;
+    const initialDelay = options.initialDelay || 1000;
+    
+    // Add timestamps
+    const finalData = {
+        ...data,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
 
-        if (docId) {
-            await db.collection(collectionName).doc(docId).set(finalData, { merge: true });
-            return docId;
-        } else {
-            const docRef = await db.collection(collectionName).add(finalData);
-            return docRef.id;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            if (docId) {
+                await db.collection(collectionName).doc(docId).set(finalData, { merge: true });
+                console.log(`✅ [DB] Document saved to ${collectionName}/${docId} (attempt ${attempt}/${maxRetries})`);
+                return docId;
+            } else {
+                const docRef = await db.collection(collectionName).add(finalData);
+                console.log(`✅ [DB] Document saved to ${collectionName}/${docRef.id} (attempt ${attempt}/${maxRetries})`);
+                return docRef.id;
+            }
+        } catch (error) {
+            console.error(`❌ [DB] Error saving document to ${collectionName} (attempt ${attempt}/${maxRetries}):`, error.message);
+            
+            // Don't retry on certain errors
+            if (error.code === 6 || error.code === 'ALREADY_EXISTS') {
+                console.log(`⚠️ [DB] Non-retryable error, stopping retries`);
+                return null;
+            }
+            
+            // Exponential backoff before retry
+            if (attempt < maxRetries) {
+                const delay = initialDelay * Math.pow(2, attempt - 1);
+                console.log(`⏳ [DB] Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
         }
-    } catch (error) {
-        console.error(`❌ Error saving document to ${collectionName}:`, error.message);
-        return null;
     }
+    
+    console.error(`❌ [DB] Failed to save document after ${maxRetries} attempts`);
+    return null;
+}
+
+/**
+ * Batch save multiple documents efficiently.
+ * @param {string} collectionName - Collection to save to.
+ * @param {Array<Object>} documents - Array of data objects.
+ * @param {number} [batchSize=500] - Firestore batch limit (max 500 operations per batch).
+ * @returns {Promise<Array<string|null>>} - Array of document IDs or null for failed documents.
+ */
+async function saveDocumentsBatch(collectionName, documents, batchSize = 500) {
+    if (!documents || documents.length === 0) {
+        console.log('⚠️ [DB] No documents to batch save');
+        return [];
+    }
+
+    const results = [];
+    const batches = [];
+    
+    // Create batches
+    for (let i = 0; i < documents.length; i += batchSize) {
+        const batch = db.batch();
+        const batchDocs = documents.slice(i, i + batchSize);
+        const batchDocRefs = [];
+        
+        batchDocs.forEach(doc => {
+            const docRef = db.collection(collectionName).doc();
+            batchDocRefs.push({ ref: docRef, data: doc });
+            batch.set(docRef, {
+                ...doc,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        
+        batches.push({ batch, batchDocRefs });
+    }
+
+    console.log(`📦 [DB] Processing ${documents.length} documents in ${batches.length} batch(es)`);
+
+    // Execute batches
+    for (let i = 0; i < batches.length; i++) {
+        const { batch, batchDocRefs } = batches[i];
+        try {
+            await batch.commit();
+            console.log(`✅ [DB] Batch ${i + 1}/${batches.length} committed successfully`);
+            
+            // Add document IDs to results
+            batchDocRefs.forEach(({ ref }) => {
+                results.push(ref.id);
+            });
+        } catch (error) {
+            console.error(`❌ [DB] Batch ${i + 1}/${batches.length} failed:`, error.message);
+            // Add null for each failed document in this batch
+            batchDocRefs.forEach(() => results.push(null));
+        }
+    }
+
+    return results;
 }
 
 /**
@@ -117,5 +200,13 @@ async function getRecentHeadlines(hours = 6, limit = 20) {
     }
 }
 
-module.exports = { db, checkDuplicate, saveDocument, getBotSettings, getRecentHeadlines, admin };
+module.exports = {
+    db,
+    admin,
+    checkDuplicate,
+    saveDocument,
+    saveDocumentsBatch,
+    getBotSettings,
+    getRecentHeadlines
+};
 
