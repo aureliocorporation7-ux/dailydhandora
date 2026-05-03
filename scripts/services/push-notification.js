@@ -1,15 +1,16 @@
 /**
- * 🔔 Push Notification Service
- * 
+ * 🔔 Push Notification Service - Supreme Divine Edition
+ *
  * Server-side utility to send push notifications to all subscribed users.
  * Used by news-bot to auto-notify on new article publish.
+ * FIXED: Correct icon paths and notification structure for PWA/mobile.
  */
 
 const { admin, db } = require('../../lib/firebase');
 
 /**
  * Send push notification to all subscribed devices
- * 
+ *
  * @param {Object} options
  * @param {string} options.title - Notification title
  * @param {string} options.body - Notification body
@@ -38,30 +39,35 @@ async function sendPushNotification({ title, body, image, url, articleId }) {
         const tokens = tokensSnapshot.docs.map(doc => doc.data().token);
         console.log(`🔔 [Push] Sending to ${tokens.length} devices...`);
 
-        // Build notification message
+        // Build notification message - FIXED: Using data-only message for reliable delivery
+        // Data-only messages always trigger the push event in SW, regardless of browser state
         const message = {
-            notification: {
-                title,
-                body,
-                ...(image && { image })
-            },
             data: {
-                title,
-                body,
+                title: title,
+                body: body,
                 url: url || '/',
                 articleId: articleId || '',
+                image: image || '',
                 timestamp: Date.now().toString()
             },
             webpush: {
                 fcmOptions: {
                     link: url || '/'
                 },
+                headers: {
+                    Urgency: 'high'
+                },
                 notification: {
-                    icon: '/icons/icon-192x192.png',
-                    badge: '/icons/badge-72x72.png',
-                    vibrate: [200, 100, 200],
+                    title: title,
+                    body: body,
+                    icon: '/icon-192x192.png',
+                    badge: '/icon-192x192.png',
+                    image: image || undefined,
+                    vibrate: [200, 100, 200, 100, 200, 100, 300],
                     requireInteraction: true,
-                    tag: articleId || 'news'
+                    tag: articleId || 'news',
+                    renotify: true,
+                    silent: false
                 }
             }
         };
@@ -86,7 +92,6 @@ async function sendPushNotification({ title, body, image, url, articleId }) {
             }
         });
 
-        // Batch delete invalid tokens
         if (tokensToRemove.length > 0) {
             const batch = db.batch();
             tokensToRemove.forEach(token => {
@@ -110,8 +115,8 @@ async function sendPushNotification({ title, body, image, url, articleId }) {
 
 /**
  * Send notification for a new article
- * Filters by category subscription - only sends to users subscribed to that category
- * 
+ * Filters by category subscription
+ *
  * @param {Object} article
  * @param {string} article.headline - Article headline
  * @param {string} article.id - Article ID
@@ -134,6 +139,9 @@ async function notifyNewArticle({ headline, id, imageUrl, category }) {
         };
 
         const emoji = categoryEmoji[category] || '📰';
+        const truncatedHeadline = headline ? headline.substring(0, 80) : 'नई खबर';
+        const notifTitle = `${emoji} ${truncatedHeadline}`;
+        const notifBody = `DailyDhandora पर नई खबर पढ़ें`;
 
         // Fetch all active FCM tokens
         const tokensSnapshot = await db.collection('fcmTokens')
@@ -146,14 +154,10 @@ async function notifyNewArticle({ headline, id, imageUrl, category }) {
         }
 
         // Filter tokens by category subscription
-        // Send to users who:
-        // 1. Have no category preferences (empty array = all categories)
-        // 2. Have subscribed to this specific category
         const eligibleTokens = tokensSnapshot.docs
             .map(doc => doc.data())
             .filter(data => {
                 const categories = data.categories || [];
-                // Empty = subscribed to all, OR category is in their list
                 return categories.length === 0 || categories.includes(category);
             })
             .map(data => data.token);
@@ -165,18 +169,14 @@ async function notifyNewArticle({ headline, id, imageUrl, category }) {
 
         console.log(`🔔 [Push] Sending to ${eligibleTokens.length}/${tokensSnapshot.docs.length} devices (category: ${category})`);
 
-        // Build notification message
+        // Build message - using data + webpush.notification dual delivery for reliability
         const message = {
-            notification: {
-                title: `${emoji} ${headline.substring(0, 50)}...`,
-                body: `DailyDhandora पर नई खबर पढ़ें`,
-                ...(imageUrl && { image: imageUrl })
-            },
             data: {
-                title: `${emoji} ${headline.substring(0, 50)}...`,
-                body: `DailyDhandora पर नई खबर पढ़ें`,
+                title: notifTitle,
+                body: notifBody,
                 url: `/article/${id}`,
                 articleId: id || '',
+                image: imageUrl || '',
                 category: category || '',
                 timestamp: Date.now().toString()
             },
@@ -184,12 +184,20 @@ async function notifyNewArticle({ headline, id, imageUrl, category }) {
                 fcmOptions: {
                     link: `/article/${id}`
                 },
+                headers: {
+                    Urgency: 'high'
+                },
                 notification: {
-                    icon: '/icons/icon-192x192.png',
-                    badge: '/icons/badge-72x72.png',
-                    vibrate: [200, 100, 200],
+                    title: notifTitle,
+                    body: notifBody,
+                    icon: '/icon-192x192.png',
+                    badge: '/icon-192x192.png',
+                    image: imageUrl || undefined,
+                    vibrate: [200, 100, 200, 100, 200, 100, 300],
                     requireInteraction: true,
-                    tag: id || 'news'
+                    tag: id || 'news',
+                    renotify: true,
+                    silent: false
                 }
             }
         };

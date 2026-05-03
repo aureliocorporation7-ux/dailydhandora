@@ -1,6 +1,6 @@
-// 🔔 DIVINE LEVEL Firebase Messaging Service Worker
+// �� DIVINE LEVEL Firebase Messaging Service Worker
 // Handles background push notifications for DailyDhandora
-// Version: 2.0 - Supreme Divine Edition
+// Version: 3.0 - Supreme Divine Edition
 
 // Import Firebase scripts (compat version for SW)
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
@@ -25,21 +25,22 @@ messaging.onBackgroundMessage((payload) => {
     console.log('🔔 [FCM SW] Background message received:', payload);
 
     // Extract notification data from both notification and data fields
-    const title = payload.notification?.title || payload.data?.title || 'DailyDhandora';
-    const body = payload.notification?.body || payload.data?.body || 'नई खबर आई है!';
-    const image = payload.notification?.image || payload.data?.image || null;
+    const notificationTitle = payload.notification?.title || payload.data?.title || 'DailyDhandora';
+    const notificationBody = payload.notification?.body || payload.data?.body || 'नई खबर आई है!';
+    const notificationImage = payload.notification?.image || payload.data?.image || null;
     const url = payload.data?.url || '/';
     const articleId = payload.data?.articleId || 'news-' + Date.now();
 
     const notificationOptions = {
-        body: body,
+        body: notificationBody,
         icon: '/icon-192x192.png',
-        badge: '/icon-192x192.png', // Fallback to main icon as specific badge missing
-        image: image,
-        tag: articleId, // Prevents duplicate notifications
-        renotify: true, // Vibrate even if same tag
-        requireInteraction: true, // Don't auto-dismiss
-        vibrate: [200, 100, 200, 100, 200], // Pattern
+        badge: '/icon-192x192.png',
+        image: notificationImage,
+        tag: articleId,
+        renotify: true,
+        requireInteraction: true,
+        vibrate: [200, 100, 200, 100, 200, 100, 300],
+        silent: false,
         data: {
             url: url,
             articleId: articleId,
@@ -51,43 +52,33 @@ messaging.onBackgroundMessage((payload) => {
         ]
     };
 
-    // Show notification
-    return self.registration.showNotification(title, notificationOptions);
+    return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
     console.log('🔔 [FCM SW] Notification clicked:', event.action, event.notification.data);
-
-    // Close the notification
     event.notification.close();
 
-    // If user clicked close, do nothing
-    if (event.action === 'close') {
-        return;
-    }
+    if (event.action === 'close') return;
 
-    // Get the URL to open
     const urlToOpen = event.notification.data?.url || '/';
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-            // Try to find an existing window/tab
+            // First try to focus an existing window with the exact URL
             for (let client of windowClients) {
-                // If found a window with the URL, focus it
                 if (client.url.includes(urlToOpen) && 'focus' in client) {
                     return client.focus();
                 }
             }
-
-            // If any window exists, navigate it to the URL
+            // Then try to navigate any existing window
             for (let client of windowClients) {
                 if ('navigate' in client && 'focus' in client) {
                     return client.navigate(urlToOpen).then(() => client.focus());
                 }
             }
-
-            // Otherwise open a new window
+            // Otherwise open new window
             if (clients.openWindow) {
                 return clients.openWindow(urlToOpen);
             }
@@ -100,9 +91,9 @@ self.addEventListener('notificationclose', (event) => {
     console.log('🔔 [FCM SW] Notification dismissed:', event.notification.data?.articleId);
 });
 
-// Handle push event (fallback for non-FCM pushes)
+// Handle push event (fallback for non-FCM pushes, and FCM when onBackgroundMessage fails)
 self.addEventListener('push', (event) => {
-    console.log('🔔 [FCM SW] Push event received');
+    console.log('🔔 [FCM SW] Push event received (fallback handler)');
 
     if (!event.data) {
         console.log('🔔 [FCM SW] Push with no data');
@@ -113,24 +104,66 @@ self.addEventListener('push', (event) => {
         const data = event.data.json();
         console.log('🔔 [FCM SW] Push data:', data);
 
-        // Only show notification if FCM didn't handle it
-        // (This is a fallback for edge cases)
+        // FCM wraps in fcm or data key - extract properly
+        const notification = data.notification || data.data || data;
+        const title = notification.title || 'DailyDhandora';
+        const body = notification.body || 'नई खबर आई है!';
+        const image = notification.image || null;
+        const url = notification.url || data.url || '/';
+        const articleId = notification.articleId || data.articleId || data.tag || 'news-' + Date.now();
+
+        const options = {
+            body: body,
+            icon: '/icon-192x192.png',
+            badge: '/icon-192x192.png',
+            image: image,
+            tag: articleId,
+            renotify: true,
+            requireInteraction: true,
+            vibrate: [200, 100, 200, 100, 200, 100, 300],
+            silent: false,
+            data: {
+                url: url,
+                articleId: articleId,
+                timestamp: Date.now()
+            },
+            actions: [
+                { action: 'open', title: '📰 पढ़ें', icon: '/icon-192x192.png' },
+                { action: 'close', title: '❌ बाद में' }
+            ]
+        };
+
+        event.waitUntil(
+            self.registration.showNotification(title, options)
+        );
     } catch (e) {
         console.log('🔔 [FCM SW] Push text:', event.data.text());
+        // Try showing as plain text
+        try {
+            const text = event.data.text();
+            if (text && text.length > 0 && text.length < 200) {
+                event.waitUntil(
+                    self.registration.showNotification('DailyDhandora', {
+                        body: text,
+                        icon: '/icon-192x192.png',
+                        badge: '/icon-192x192.png',
+                        tag: 'push-' + Date.now()
+                    })
+                );
+            }
+        } catch (e2) {}
     }
 });
 
 // Service worker install event
 self.addEventListener('install', (event) => {
     console.log('🔔 [FCM SW] Service Worker installing...');
-    // Take over immediately
     self.skipWaiting();
 });
 
 // Service worker activate event
 self.addEventListener('activate', (event) => {
     console.log('🔔 [FCM SW] Service Worker activated!');
-    // Claim all clients immediately
     event.waitUntil(clients.claim());
 });
 

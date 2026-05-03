@@ -3,15 +3,16 @@ import { cookies } from 'next/headers';
 import { admin, db } from '@/lib/firebase';
 
 /**
- * 🎯 NOTIFICATION SEND API - Auto-Targeting Edition
- * 
- * Send push notifications to all or targeted devices.
- * NEW: Supports category filtering for auto-targeting.
+ * 🎯 NOTIFICATION SEND API - Supreme Divine Edition
+ *
+ * FIXED: Correct icon paths (/icon-192x192.png not /icons/icon-192x192.png)
+ * FIXED: Added webpush.notification.title/body for browser notification rendering
+ * FIXED: Added data payload for push event fallback in service worker
+ * FIXED: Added high urgency header for immediate delivery
  */
 
 export async function POST(request) {
     try {
-        // Check admin authentication
         const cookieStore = await cookies();
         const adminSession = cookieStore.get('admin_session');
 
@@ -29,17 +30,13 @@ export async function POST(request) {
         // Build query for tokens
         let tokensQuery = db.collection('fcmTokens').where('active', '==', true);
 
-        // 🎯 CATEGORY TARGETING - Filter by category if specified
         let tokensSnapshot;
         if (targetCategory) {
-            // Get all active tokens first
             tokensSnapshot = await tokensQuery.get();
 
-            // Filter tokens that have this category in their preferences
             const filteredDocs = tokensSnapshot.docs.filter(doc => {
                 const data = doc.data();
                 const categories = data.categories || [];
-                // Include if user has this category OR has no categories (send to all)
                 return categories.length === 0 || categories.includes(targetCategory);
             });
 
@@ -64,18 +61,14 @@ export async function POST(request) {
         const tokens = tokensSnapshot.docs.map(doc => doc.data().token);
         console.log(`🔔 [Send] Sending to ${tokens.length} devices`);
 
-        // Build notification message
+        // Build message: data-only for reliable SW push event + webpush.notification for auto-display
         const message = {
-            notification: {
-                title,
-                body: notificationBody,
-                ...(image && { image })
-            },
             data: {
-                title,
+                title: title,
                 body: notificationBody,
                 url: url || '/',
                 articleId: articleId || '',
+                image: image || '',
                 category: targetCategory || '',
                 timestamp: Date.now().toString()
             },
@@ -83,17 +76,24 @@ export async function POST(request) {
                 fcmOptions: {
                     link: url || '/'
                 },
+                headers: {
+                    Urgency: 'high'
+                },
                 notification: {
-                    icon: '/icons/icon-192x192.png',
-                    badge: '/icons/badge-72x72.png',
-                    vibrate: [200, 100, 200],
+                    title: title,
+                    body: notificationBody,
+                    icon: '/icon-192x192.png',
+                    badge: '/icon-192x192.png',
+                    image: image || undefined,
+                    vibrate: [200, 100, 200, 100, 200, 100, 300],
                     requireInteraction: true,
-                    tag: articleId || targetCategory || 'general'
+                    tag: articleId || targetCategory || 'general',
+                    renotify: true,
+                    silent: false
                 }
             }
         };
 
-        // Send to all tokens
         const response = await admin.messaging().sendEachForMulticast({
             tokens,
             ...message
@@ -139,10 +139,6 @@ export async function POST(request) {
     }
 }
 
-/**
- * GET /api/notifications/send
- * Get subscriber counts (with optional category breakdown)
- */
 export async function GET(request) {
     try {
         const cookieStore = await cookies();
@@ -156,7 +152,6 @@ export async function GET(request) {
             .where('active', '==', true)
             .get();
 
-        // Build category breakdown
         const categoryBreakdown = {};
         tokensSnapshot.docs.forEach(doc => {
             const data = doc.data();
