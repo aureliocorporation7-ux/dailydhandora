@@ -55,6 +55,7 @@ function DashboardContent() {
   const [audioGen, setAudioGen] = useState(true);
   const [enablePaidAudio, setEnablePaidAudio] = useState(true);
   const [showViews, setShowViews] = useState(true);
+  const [sendTrafficToWebsite, setSendTrafficToWebsite] = useState(false);
   const [articles, setArticles] = useState([]);
   const [filter, setFilter] = useState('draft');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -101,6 +102,7 @@ function DashboardContent() {
       setAudioGen(data.enableAudioGen);
       setEnablePaidAudio(data.enablePaidAudio !== false); // Default true
       setShowViews(data.showViewCounts !== false);
+      setSendTrafficToWebsite(data.sendTrafficToWebsite || false);
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -237,6 +239,21 @@ function DashboardContent() {
       });
     } catch (error) {
       setShowViews(!newState);
+      alert('Failed to update settings');
+    }
+  };
+
+  const toggleSendTrafficToWebsite = async () => {
+    const newState = !sendTrafficToWebsite;
+    setSendTrafficToWebsite(newState);
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sendTrafficToWebsite: newState }),
+      });
+    } catch (error) {
+      setSendTrafficToWebsite(!newState);
       alert('Failed to update settings');
     }
   };
@@ -564,6 +581,20 @@ function DashboardContent() {
               </span>
               <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${showViews ? 'bg-orange-500' : 'bg-slate-700'}`}>
                 <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${showViews ? 'translate-x-6' : 'translate-x-0'}`} />
+              </div>
+            </button>
+
+            <button
+              onClick={toggleSendTrafficToWebsite}
+              className="w-full flex items-center justify-between px-4 py-4 hover:bg-white/5 rounded-xl transition-all active:scale-[0.98]"
+              aria-label={`Toggle traffic target ${sendTrafficToWebsite ? 'website' : 'blogger'}`}
+            >
+              <span className="flex items-center gap-3 text-slate-400">
+                <Rocket size={18} />
+                Traffic Target: {sendTrafficToWebsite ? 'Website' : 'Blogger'}
+              </span>
+              <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${sendTrafficToWebsite ? 'bg-orange-500' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${sendTrafficToWebsite ? 'translate-x-6' : 'translate-x-0'}`} />
               </div>
             </button>
           </div>

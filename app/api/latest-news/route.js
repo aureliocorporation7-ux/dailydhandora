@@ -41,6 +41,11 @@ export async function GET(request) {
     const protocol = request.headers.get('x-forwarded-proto') || 'https';
     const baseUrl = `${protocol}://${host}`;
 
+    // Fetch traffic target setting from settings/global
+    const settingsDoc = await db.collection('settings').doc('global').get();
+    const settings = settingsDoc.exists ? settingsDoc.data() : {};
+    const sendTrafficToWebsite = settings.sendTrafficToWebsite || false;
+
     // Helper to transform doc to news object
     const transformDoc = (doc) => {
       const data = doc.data();
@@ -49,12 +54,18 @@ export async function GET(request) {
         : '';
       const summary = cleanText.split(' ').slice(0, 25).join(' ') + (cleanText ? '...' : '');
 
+      // Determine the destination URL based on the admin toggle
+      let finalUrl = `${baseUrl}/article/${doc.id}`;
+      if (!sendTrafficToWebsite && data.bloggerPostUrl) {
+        finalUrl = data.bloggerPostUrl;
+      }
+
       return {
         headline: data.headline || 'No Title',
         imageUrl: data.imageUrl || '',
         shareCardUrl: data.shareCardUrl || data.imageUrl || '',
         summary: summary,
-        url: `${baseUrl}/article/${doc.id}`,
+        url: finalUrl,
         category: data.category,
         categoryKey: REVERSE_MAP[data.category] || 'other',
         publishedAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),

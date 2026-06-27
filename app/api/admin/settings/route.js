@@ -13,7 +13,8 @@ export async function GET() {
       enablePaidAudio: true, // Default: Paid audio (ElevenLabs) enabled
       googleAdsId: '',
       googleAdsEnabled: false,
-      showViewCounts: true
+      showViewCounts: true,
+      sendTrafficToWebsite: false
     };
 
     if (doc.exists) {
@@ -26,7 +27,8 @@ export async function GET() {
         enablePaidAudio: docData.enablePaidAudio !== false, // Default true
         googleAdsId: docData.googleAdsId || '', // Google AdSense Publisher ID
         googleAdsEnabled: docData.googleAdsEnabled || false,
-        showViewCounts: docData.showViewCounts !== false // Default true - show views on trending
+        showViewCounts: docData.showViewCounts !== false, // Default true - show views on trending
+        sendTrafficToWebsite: docData.sendTrafficToWebsite || false
       };
     }
     return NextResponse.json(data);
@@ -75,6 +77,11 @@ export async function POST(request) {
     // Show View Counts toggle
     if (typeof body.showViewCounts !== 'undefined') {
       updateData.showViewCounts = body.showViewCounts;
+    }
+
+    // Traffic Target Toggle
+    if (typeof body.sendTrafficToWebsite !== 'undefined') {
+      updateData.sendTrafficToWebsite = body.sendTrafficToWebsite;
     }
 
     await db.collection('settings').doc('global').set(updateData, { merge: true });
