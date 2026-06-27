@@ -126,12 +126,24 @@ async function publishToBlogger(article, articleId, firestoreDb = null) {
         const accessToken = await getAccessToken();
         const formattedHtml = formatContentForBlogger(article.headline, article.content, article.imageUrl);
 
+        // Prep the Blogger labels (map Firestore category -> Blogger label/tag)
+        const labels = [];
+        if (article.category) {
+            labels.push(article.category);
+        }
+        if (Array.isArray(article.tags)) {
+            article.tags.forEach(t => { if (t && !labels.includes(t)) labels.push(t); });
+        } else if (article.tags && typeof article.tags === 'string') {
+            const splitTags = article.tags.split(',').map(t => t.trim()).filter(Boolean);
+            splitTags.forEach(t => { if (!labels.includes(t)) labels.push(t); });
+        }
+
         // Prep the Blogger payload
         const postData = {
             kind: 'blogger#post',
             title: article.headline,
             content: formattedHtml,
-            labels: article.tags || []
+            labels: labels
         };
 
         let response;
