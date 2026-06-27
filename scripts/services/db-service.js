@@ -5,6 +5,7 @@ if (process.env.CI) {
 }
 
 const { db, admin } = require('../../lib/firebase');
+const bloggerService = require('./blogger-service');
 
 /**
  * Checks if a document exists in a collection based on a field value.
@@ -52,10 +53,30 @@ async function saveDocument(collectionName, data, docId = null, options = {}) {
             if (docId) {
                 await db.collection(collectionName).doc(docId).set(finalData, { merge: true });
                 console.log(`✅ [DB] Document saved to ${collectionName}/${docId} (attempt ${attempt}/${maxRetries})`);
+                
+                // 🚀 BLOGGER AUTO-POST: Trigger if it's a published article
+                if (collectionName === 'articles' && finalData.status === 'published') {
+                    try {
+                        await bloggerService.publishToBlogger(finalData, docId, db);
+                    } catch (err) {
+                        console.error('⚠️ [Blogger Hook Error]:', err.message);
+                    }
+                }
+                
                 return docId;
             } else {
                 const docRef = await db.collection(collectionName).add(finalData);
                 console.log(`✅ [DB] Document saved to ${collectionName}/${docRef.id} (attempt ${attempt}/${maxRetries})`);
+                
+                // 🚀 BLOGGER AUTO-POST: Trigger if it's a published article
+                if (collectionName === 'articles' && finalData.status === 'published') {
+                    try {
+                        await bloggerService.publishToBlogger(finalData, docRef.id, db);
+                    } catch (err) {
+                        console.error('⚠️ [Blogger Hook Error]:', err.message);
+                    }
+                }
+                
                 return docRef.id;
             }
         } catch (error) {

@@ -60,3 +60,6 @@ scripts/verify*
 # PWA Generated
 public/sw.js
 public/workbox-*.js
+
+# Git Push Script (Contains Token)
+git-push.sh

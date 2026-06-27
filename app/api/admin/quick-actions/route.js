@@ -43,6 +43,17 @@ export async function POST(request) {
                 });
                 await batch.commit();
 
+                // 🚀 BLOGGER AUTO-POST: Publish all of them to Blogger
+                try {
+                    const bloggerService = require('@/scripts/services/blogger-service');
+                    for (const doc of draftsSnapshot.docs) {
+                        const articleData = doc.data();
+                        await bloggerService.publishToBlogger({ ...articleData, status: 'published' }, doc.id, db);
+                    }
+                } catch (bloggerErr) {
+                    console.error('⚠️ [Blogger Quick Action Publish Error]:', bloggerErr.message);
+                }
+
                 await logActivity('admin_publish', `Bulk published ${count} articles`);
                 return NextResponse.json({ message: `Published ${count} articles!` });
             }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
+import bloggerService from '@/scripts/services/blogger-service';
 
 // GET: List articles (filtered by status)
 export async function GET(request) {
@@ -59,6 +60,16 @@ export async function POST(request) {
     };
 
     const docRef = await db.collection('articles').add(newArticle);
+
+    // 🚀 BLOGGER AUTO-POST: Publish if manually created as published
+    if (newArticle.status === 'published') {
+      try {
+        await bloggerService.publishToBlogger(newArticle, docRef.id, db);
+      } catch (bloggerErr) {
+        console.error('⚠️ [Blogger Admin Post Error]:', bloggerErr.message);
+      }
+    }
+
     return NextResponse.json({ success: true, id: docRef.id });
 
   } catch (error) {
@@ -77,6 +88,18 @@ export async function PUT(request) {
         status: 'published',
         publishedAt: new Date()
       });
+
+      // 🚀 BLOGGER AUTO-POST: Publish article
+      try {
+        const doc = await db.collection('articles').doc(id).get();
+        if (doc.exists) {
+          const articleData = doc.data();
+          await bloggerService.publishToBlogger({ ...articleData, status: 'published' }, id, db);
+        }
+      } catch (bloggerErr) {
+        console.error('⚠️ [Blogger Admin Publish Error]:', bloggerErr.message);
+      }
+
       return NextResponse.json({ success: true });
     }
 
@@ -89,6 +112,20 @@ export async function PUT(request) {
         category,
         updatedAt: new Date()
       });
+
+      // 🚀 BLOGGER AUTO-POST: Sync changes if published
+      try {
+        const doc = await db.collection('articles').doc(id).get();
+        if (doc.exists) {
+          const articleData = doc.data();
+          if (articleData.status === 'published') {
+            await bloggerService.publishToBlogger(articleData, id, db);
+          }
+        }
+      } catch (bloggerErr) {
+        console.error('⚠️ [Blogger Admin Sync Error]:', bloggerErr.message);
+      }
+
       return NextResponse.json({ success: true });
     }
 
