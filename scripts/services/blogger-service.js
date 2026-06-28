@@ -16,10 +16,21 @@ const BLOGGER_BLOG_ID = process.env.BLOGGER_BLOG_ID;
 
 /**
  * Checks if all required Blogger API environment variables are configured.
+ * Logs exactly which variables are missing if configuration is incomplete.
  * @returns {boolean}
  */
 function isConfigured() {
-    return !!(BLOGGER_CLIENT_ID && BLOGGER_CLIENT_SECRET && BLOGGER_REFRESH_TOKEN && BLOGGER_BLOG_ID);
+    const missing = [];
+    if (!BLOGGER_CLIENT_ID) missing.push('BLOGGER_CLIENT_ID');
+    if (!BLOGGER_CLIENT_SECRET) missing.push('BLOGGER_CLIENT_SECRET');
+    if (!BLOGGER_REFRESH_TOKEN) missing.push('BLOGGER_REFRESH_TOKEN');
+    if (!BLOGGER_BLOG_ID) missing.push('BLOGGER_BLOG_ID');
+
+    if (missing.length > 0) {
+        console.log(`⚠️ [Blogger Service] Configuration incomplete. Missing: ${missing.join(', ')}`);
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -112,13 +123,15 @@ function formatContentForBlogger(headline, content, imageUrl) {
  * @returns {Promise<{postId: string, url: string} | null>}
  */
 async function publishToBlogger(article, articleId, firestoreDb = null) {
+    console.log(`📡 [Blogger Service] Sync triggered for Article ID: "${articleId || 'NEW'}" | Headline: "${article.headline?.substring(0, 50)}..."`);
+
     if (!isConfigured()) {
-        console.log('⚠️ [Blogger Service] Blogger credentials not set. Skipping auto-publish.');
+        console.log('⚠️ [Blogger Service] Skipping Blogger publish: credentials are not set.');
         return null;
     }
 
     if (article.status !== 'published') {
-        console.log(`ℹ️ [Blogger Service] Skipping Blogger publish. Status is '${article.status}'.`);
+        console.log(`ℹ️ [Blogger Service] Skipping Blogger publish. Status is '${article.status}' (not 'published').`);
         return null;
     }
 
