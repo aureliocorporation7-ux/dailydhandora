@@ -101,7 +101,7 @@ export default async function BlogPost({ params }) {
     '@type': 'NewsArticle',
     headline: article.title,
     // Use article.image or default to logo if not present
-    image: article.image ? [article.image] : ['https://dailydhandora.vercel.app/logo.png'],
+    image: article.image ? [article.image] : ['https://dailydhandora.onrender.com/logo-512.webp'],
     datePublished: article.createdAt,
     dateModified: article.createdAt, // Or updatedAt if available
     author: [{

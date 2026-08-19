@@ -54,7 +54,7 @@ const organizationSchema = {
   '@type': 'NewsMediaOrganization',
   name: 'DailyDhandora',
   url: baseUrl,
-  logo: `${baseUrl}/logo.png`,
+  logo: `${baseUrl}/logo-512.webp`,
   sameAs: [
     'https://whatsapp.com/channel/0029Vb2keLhKAwEq3zBNP308',
   ],

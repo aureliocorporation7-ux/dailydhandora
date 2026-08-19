@@ -26,8 +26,10 @@ export default function Navbar() {
           <Link href="/" className="flex items-center space-x-3 group">
             <div className="relative h-12 w-12 sm:h-14 sm:w-14">
               <img
-                src="/logo.png"
+                src="/logo.webp"
                 alt="DailyDhandora Logo"
+                width={56}
+                height={56}
                 className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-300 drop-shadow-lg"
               />
             </div>

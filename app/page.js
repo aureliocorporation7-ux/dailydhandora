@@ -2,8 +2,7 @@ import { db } from '@/lib/firebase';
 import ArticleCard from './components/ArticleCard';
 import TrendingSection from './components/TrendingSection';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 120; // ISR: Cache for 2 minutes, then revalidate in background
 
 async function getArticles() {
   try {

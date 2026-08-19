@@ -144,6 +144,18 @@ const withPWA = require('@ducanh2912/next-pwa').default({
           },
         },
       },
+      // 🛡️ LOCAL STATIC ASSETS - Bandwidth Saver (logos, icons, local images)
+      {
+        urlPattern: /^https?:\/\/[^/]+\/.*\.(?:png|jpg|jpeg|webp|svg|ico)$/,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'local-assets',
+          expiration: {
+            maxEntries: 50,
+            maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+          },
+        },
+      },
     ],
   },
 });

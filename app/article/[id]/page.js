@@ -134,7 +134,7 @@ export default async function ArticlePage({ params }) {
       name: 'DailyDhandora',
       logo: {
         '@type': 'ImageObject',
-        url: `${baseUrl}/logo.png`,
+        url: `${baseUrl}/logo-512.webp`,
         width: 512,
         height: 512
       }
@@ -242,8 +242,10 @@ export default async function ArticlePage({ params }) {
         <div className="mt-12 p-6 bg-neutral-900/50 border border-neutral-800 rounded-xl flex items-start gap-4 shadow-lg">
           <div className="w-14 h-14 bg-neutral-800 rounded-full flex items-center justify-center flex-shrink-0 border border-white/10 overflow-hidden shadow-inner">
             <img
-              src="/logo.png"
+              src="/logo.webp"
               alt="DailyDhandora Official"
+              width={56}
+              height={56}
               className="w-full h-full object-contain p-1"
             />
           </div>
