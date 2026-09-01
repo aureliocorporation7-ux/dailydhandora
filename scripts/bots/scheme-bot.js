@@ -23,22 +23,22 @@ async function run() {
         return;
     }
 
-    const filters = [{ "identifier": "beneficiaryState", "value": "Rajasthan" }];
-    const encodedQuery = encodeURIComponent(JSON.stringify(filters));
-    const apiUrl = `https://api.myscheme.gov.in/search/v6/schemes?lang=hi&q=${encodedQuery}&from=0&size=50`;
+    // 🛡️ FIXED: MyScheme API expects plain text in 'q', not JSON filter arrays
+    const apiUrl = `https://api.myscheme.gov.in/search/v6/schemes?lang=hi&q=&from=0&size=50&filters[0][identifier]=beneficiaryState&filters[0][value]=Rajasthan`;
 
     try {
         console.log(`  🚀 [Scheme Bot] Fetching Top 50 Schemes...`);
         const response = await axios.get(apiUrl, {
             headers: {
-                'x-api-key': 'tYTy5eEhlu9rFjyxuCr7ra7ACp4dv1RH8gWuHTDc',
+                'x-api-key': process.env.MYSCHEME_API_KEY || 'tYTy5eEhlu9rFjyxuCr7ra7ACp4dv1RH8gWuHTDc',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Referer': 'https://www.myscheme.gov.in/',
                 'Origin': 'https://www.myscheme.gov.in'
-            }
+            },
+            timeout: 30000
         });
 
-        const items = response.data?.data?.hits?.items || [];
+        const items = response.data?.data?.hits?.items || response.data?.data?.schemes || [];
         if (items.length === 0) {
             console.log("  ⚠️ [Scheme Bot] No schemes returned. Exiting.");
             return;
@@ -181,7 +181,8 @@ async function run() {
         console.log(`\n🎉 [Scheme Bot] Cycle Finished. New: ${savedCount}, Skipped: ${skippedCount}`);
 
     } catch (e) {
-        console.error(`  ❌ [Scheme Bot] Critical Error: ${e.message}`);
+        const detail = e.response?.data ? JSON.stringify(e.response.data).substring(0, 500) : e.message;
+        console.error(`  ❌ [Scheme Bot] Critical Error: ${detail}`);
     }
 }
 

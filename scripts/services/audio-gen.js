@@ -196,10 +196,6 @@ async function generateAndStoreAudio(text, articleId, settings = {}) {
     console.log(`🎙️ [AudioGen] Sanitized text length: ${cleanText.length} chars`);
 
     const apiKeys = getApiKeys();
-    if (apiKeys.length === 0) {
-        console.error("❌ [AudioGen] NO API KEYS FOUND! Please check .env.local");
-        return null;
-    }
 
     // 1. Check Cache in Firestore
     try {
@@ -213,11 +209,13 @@ async function generateAndStoreAudio(text, articleId, settings = {}) {
         // 2. PRIMARY: Try Gemini Native Audio (ALWAYS AVAILABLE - free)
         let audioBuffer = await generateGeminiAudio(cleanText);
 
+        // 🛡️ FIXED: lastError declared at function scope (was inside if block causing ReferenceError)
+        let lastError = null;
+
         // 3. FALLBACK: ElevenLabs (If Gemini failed AND paid audio is enabled)
         const paidAudioEnabled = settings.enablePaidAudio !== false; // Default true
-        if (!audioBuffer && paidAudioEnabled) {
+        if (!audioBuffer && paidAudioEnabled && apiKeys.length > 0) {
             console.log(`⚠️ [AudioGen] Fallback: Switching to ElevenLabs (paid audio enabled: ${paidAudioEnabled})...`);
-            let lastError = null;
 
             console.log(`🎙️ [AudioGen] Starting ElevenLabs Generation with ${apiKeys.length} available keys...`);
 
@@ -255,6 +253,8 @@ async function generateAndStoreAudio(text, articleId, settings = {}) {
             }
         } else if (!audioBuffer && !paidAudioEnabled) {
             console.log(`⏭️ [AudioGen] Paid audio disabled, skipping ElevenLabs fallback.`);
+        } else if (!audioBuffer && apiKeys.length === 0) {
+            console.log(`⏭️ [AudioGen] No ElevenLabs API keys found, skipping fallback.`);
         }
 
         if (!audioBuffer) {

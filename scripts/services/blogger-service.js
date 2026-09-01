@@ -9,10 +9,15 @@ if (!process.env.BLOGGER_BLOG_ID) {
     }
 }
 
-const BLOGGER_CLIENT_ID = process.env.BLOGGER_CLIENT_ID;
-const BLOGGER_CLIENT_SECRET = process.env.BLOGGER_CLIENT_SECRET;
-const BLOGGER_REFRESH_TOKEN = process.env.BLOGGER_REFRESH_TOKEN;
-const BLOGGER_BLOG_ID = process.env.BLOGGER_BLOG_ID;
+// 🛡️ FIXED: Read env vars dynamically via getters to prevent stale undefined values
+function getConfig() {
+    return {
+        clientId: process.env.BLOGGER_CLIENT_ID,
+        clientSecret: process.env.BLOGGER_CLIENT_SECRET,
+        refreshToken: process.env.BLOGGER_REFRESH_TOKEN,
+        blogId: process.env.BLOGGER_BLOG_ID
+    };
+}
 
 /**
  * Checks if all required Blogger API environment variables are configured.
@@ -20,11 +25,12 @@ const BLOGGER_BLOG_ID = process.env.BLOGGER_BLOG_ID;
  * @returns {boolean}
  */
 function isConfigured() {
+    const cfg = getConfig();
     const missing = [];
-    if (!BLOGGER_CLIENT_ID) missing.push('BLOGGER_CLIENT_ID');
-    if (!BLOGGER_CLIENT_SECRET) missing.push('BLOGGER_CLIENT_SECRET');
-    if (!BLOGGER_REFRESH_TOKEN) missing.push('BLOGGER_REFRESH_TOKEN');
-    if (!BLOGGER_BLOG_ID) missing.push('BLOGGER_BLOG_ID');
+    if (!cfg.clientId) missing.push('BLOGGER_CLIENT_ID');
+    if (!cfg.clientSecret) missing.push('BLOGGER_CLIENT_SECRET');
+    if (!cfg.refreshToken) missing.push('BLOGGER_REFRESH_TOKEN');
+    if (!cfg.blogId) missing.push('BLOGGER_BLOG_ID');
 
     if (missing.length > 0) {
         console.log(`⚠️ [Blogger Service] Configuration incomplete. Missing: ${missing.join(', ')}`);
@@ -35,6 +41,7 @@ function isConfigured() {
 
 /**
  * Generates a fresh Google OAuth2 Access Token using the Refresh Token.
+ * 🛡️ SUPREME: Auto-retry with exponential backoff (up to 3 attempts)
  * @returns {Promise<string>}
  */
 async function getAccessToken() {
@@ -42,26 +49,49 @@ async function getAccessToken() {
         throw new Error('Blogger API environment variables are not fully configured.');
     }
 
-    try {
-        const params = new URLSearchParams();
-        params.append('client_id', BLOGGER_CLIENT_ID);
-        params.append('client_secret', BLOGGER_CLIENT_SECRET);
-        params.append('refresh_token', BLOGGER_REFRESH_TOKEN);
-        params.append('grant_type', 'refresh_token');
+    const cfg = getConfig();
+    const maxRetries = 3;
 
-        const response = await axios.post('https://oauth2.googleapis.com/token', params, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            const params = new URLSearchParams();
+            params.append('client_id', cfg.clientId);
+            params.append('client_secret', cfg.clientSecret);
+            params.append('refresh_token', cfg.refreshToken);
+            params.append('grant_type', 'refresh_token');
 
-        if (response.data && response.data.access_token) {
-            return response.data.access_token;
-        } else {
-            throw new Error('Access token not found in OAuth response.');
+            // 🛡️ FIXED: Use params.toString() for proper serialization
+            const response = await axios.post('https://oauth2.googleapis.com/token', params.toString(), {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                timeout: 15000
+            });
+
+            if (response.data && response.data.access_token) {
+                if (attempt > 1) console.log(`✅ [Blogger Service] OAuth token obtained on retry #${attempt}`);
+                return response.data.access_token;
+            } else {
+                throw new Error('Access token not found in OAuth response.');
+            }
+        } catch (error) {
+            const errorData = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+            const isInvalidGrant = error.response?.data?.error === 'invalid_grant';
+
+            if (isInvalidGrant) {
+                console.error('❌ [Blogger Service] OAuth INVALID_GRANT: Refresh token has EXPIRED.');
+                console.error('   👉 ACTION REQUIRED: Go to Google Cloud Console → OAuth → Set app to "Production" mode, then re-generate refresh token.');
+                throw new Error('Blogger refresh token expired. Re-generate in Google Cloud Console.');
+            }
+
+            console.error(`❌ [Blogger Service] OAuth token refresh failed (attempt ${attempt}/${maxRetries}):`, errorData);
+
+            if (attempt < maxRetries) {
+                const delay = 2000 * attempt;
+                console.log(`   ⏳ Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                throw new Error(`Failed to refresh Blogger access token after ${maxRetries} attempts: ${error.message}`);
+            }
         }
-    } catch (error) {
-        const errorData = error.response ? JSON.stringify(error.response.data) : error.message;
-        console.error('❌ [Blogger Service] OAuth token refresh failed:', errorData);
-        throw new Error(`Failed to refresh Blogger access token: ${error.message}`);
     }
 }
 
@@ -137,6 +167,7 @@ async function publishToBlogger(article, articleId, firestoreDb = null) {
 
     try {
         const accessToken = await getAccessToken();
+        const cfg = getConfig();
         const formattedHtml = formatContentForBlogger(article.headline, article.content, article.imageUrl);
 
         // Prep the Blogger labels (only use the main category label for menu filters)
@@ -162,23 +193,26 @@ async function publishToBlogger(article, articleId, firestoreDb = null) {
         if (bloggerPostId) {
             // Update existing post
             console.log(`🔄 [Blogger Service] Updating existing Blogger post: ${bloggerPostId}...`);
-            const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOGGER_BLOG_ID}/posts/${bloggerPostId}`;
+            const url = `https://www.googleapis.com/blogger/v3/blogs/${cfg.blogId}/posts/${bloggerPostId}`;
             response = await axios.put(url, postData, {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                timeout: 30000
             });
             console.log(`✅ [Blogger Service] Blogger post updated: ${response.data.url}`);
         } else {
             // Create new post
             console.log(`🆕 [Blogger Service] Publishing new Blogger post for: "${article.headline}"...`);
-            const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOGGER_BLOG_ID}/posts/`;
+            // 🛡️ FIXED: Removed trailing slash (was causing 301 redirects)
+            const url = `https://www.googleapis.com/blogger/v3/blogs/${cfg.blogId}/posts`;
             response = await axios.post(url, postData, {
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                timeout: 30000
             });
             console.log(`✅ [Blogger Service] Blogger post published successfully: ${response.data.url}`);
         }

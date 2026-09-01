@@ -11,6 +11,7 @@ export async function GET() {
       enableAIImages: true, // Default: AI images enabled
       enableAudioGen: true,
       enablePaidAudio: true, // Default: Paid audio (ElevenLabs) enabled
+      enableBloggerSync: true, // 🆕 Default: Blogger auto-post enabled
       googleAdsId: '',
       googleAdsEnabled: false,
       showViewCounts: true,
@@ -25,6 +26,7 @@ export async function GET() {
         enableAIImages: docData.enableAIImages !== false, // Default true
         enableAudioGen: docData.enableAudioGen !== false,
         enablePaidAudio: docData.enablePaidAudio !== false, // Default true
+        enableBloggerSync: docData.enableBloggerSync !== false, // 🆕 Default true
         googleAdsId: docData.googleAdsId || '', // Google AdSense Publisher ID
         googleAdsEnabled: docData.googleAdsEnabled || false,
         showViewCounts: docData.showViewCounts !== false, // Default true - show views on trending
@@ -64,6 +66,11 @@ export async function POST(request) {
 
     if (typeof body.enablePaidAudio !== 'undefined') {
       updateData.enablePaidAudio = body.enablePaidAudio;
+    }
+
+    // 🆕 Blogger Sync toggle
+    if (typeof body.enableBloggerSync !== 'undefined') {
+      updateData.enableBloggerSync = body.enableBloggerSync;
     }
 
     // Google Ads settings

@@ -56,6 +56,7 @@ function DashboardContent() {
   const [enablePaidAudio, setEnablePaidAudio] = useState(true);
   const [showViews, setShowViews] = useState(true);
   const [sendTrafficToWebsite, setSendTrafficToWebsite] = useState(false);
+  const [bloggerSync, setBloggerSync] = useState(true);
   const [articles, setArticles] = useState([]);
   const [filter, setFilter] = useState('draft');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -103,6 +104,7 @@ function DashboardContent() {
       setEnablePaidAudio(data.enablePaidAudio !== false); // Default true
       setShowViews(data.showViewCounts !== false);
       setSendTrafficToWebsite(data.sendTrafficToWebsite || false);
+      setBloggerSync(data.enableBloggerSync !== false); // Default true
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -254,6 +256,21 @@ function DashboardContent() {
       });
     } catch (error) {
       setSendTrafficToWebsite(!newState);
+      alert('Failed to update settings');
+    }
+  };
+
+  const toggleBloggerSync = async () => {
+    const newState = !bloggerSync;
+    setBloggerSync(newState);
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enableBloggerSync: newState }),
+      });
+    } catch (error) {
+      setBloggerSync(!newState);
       alert('Failed to update settings');
     }
   };
@@ -595,6 +612,20 @@ function DashboardContent() {
               </span>
               <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${sendTrafficToWebsite ? 'bg-orange-500' : 'bg-slate-700'}`}>
                 <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${sendTrafficToWebsite ? 'translate-x-6' : 'translate-x-0'}`} />
+              </div>
+            </button>
+
+            <button
+              onClick={toggleBloggerSync}
+              className="w-full flex items-center justify-between px-4 py-4 hover:bg-white/5 rounded-xl transition-all active:scale-[0.98]"
+              aria-label={`Toggle Blogger sync ${bloggerSync ? 'off' : 'on'}`}
+            >
+              <span className="flex items-center gap-3 text-slate-400">
+                <ExternalLink size={18} />
+                Blogger Sync
+              </span>
+              <div className={`w-12 h-6 rounded-full p-0.5 transition-all duration-200 ${bloggerSync ? 'bg-green-500' : 'bg-slate-700'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${bloggerSync ? 'translate-x-6' : 'translate-x-0'}`} />
               </div>
             </button>
           </div>

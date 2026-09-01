@@ -54,10 +54,17 @@ async function saveDocument(collectionName, data, docId = null, options = {}) {
                 await db.collection(collectionName).doc(docId).set(finalData, { merge: true });
                 console.log(`✅ [DB] Document saved to ${collectionName}/${docId} (attempt ${attempt}/${maxRetries})`);
                 
-                // 🚀 BLOGGER AUTO-POST: Trigger if it's a published article
+                // 🚀 BLOGGER AUTO-POST: Trigger if it's a published article AND Blogger sync is enabled
                 if (collectionName === 'articles' && finalData.status === 'published') {
                     try {
-                        await bloggerService.publishToBlogger(finalData, docId, db);
+                        // 🛡️ Check admin toggle before posting
+                        const settingsDoc = await db.collection('settings').doc('global').get();
+                        const bloggerEnabled = settingsDoc.exists ? settingsDoc.data().enableBloggerSync !== false : true;
+                        if (bloggerEnabled) {
+                            await bloggerService.publishToBlogger(finalData, docId || docRef.id, db);
+                        } else {
+                            console.log('⏭️ [Blogger] Skipped: Blogger Sync disabled by Admin.');
+                        }
                     } catch (err) {
                         console.error('⚠️ [Blogger Hook Error]:', err.message);
                     }
@@ -68,10 +75,16 @@ async function saveDocument(collectionName, data, docId = null, options = {}) {
                 const docRef = await db.collection(collectionName).add(finalData);
                 console.log(`✅ [DB] Document saved to ${collectionName}/${docRef.id} (attempt ${attempt}/${maxRetries})`);
                 
-                // 🚀 BLOGGER AUTO-POST: Trigger if it's a published article
+                // 🚀 BLOGGER AUTO-POST: Trigger if it's a published article AND Blogger sync is enabled
                 if (collectionName === 'articles' && finalData.status === 'published') {
                     try {
-                        await bloggerService.publishToBlogger(finalData, docRef.id, db);
+                        const settingsDoc = await db.collection('settings').doc('global').get();
+                        const bloggerEnabled = settingsDoc.exists ? settingsDoc.data().enableBloggerSync !== false : true;
+                        if (bloggerEnabled) {
+                            await bloggerService.publishToBlogger(finalData, docRef.id, db);
+                        } else {
+                            console.log('⏭️ [Blogger] Skipped: Blogger Sync disabled by Admin.');
+                        }
                     } catch (err) {
                         console.error('⚠️ [Blogger Hook Error]:', err.message);
                     }
@@ -165,7 +178,7 @@ async function saveDocumentsBatch(collectionName, documents, batchSize = 500) {
  */
 async function getBotSettings() {
     try {
-        // console.log("  ⚙️ [DB Service] Fetching Admin Settings..."); // Too noisy for every loop? Maybe okay.
+        // console.log("  ⚙️ [DB Service] Fetching Admin Settings...\"); // Too noisy for every loop? Maybe okay.
         const doc = await db.collection('settings').doc('global').get();
         if (doc.exists) {
             const data = doc.data();
@@ -175,6 +188,7 @@ async function getBotSettings() {
                 isBotActive: botMode !== 'off',
                 enableImageGen: data.imageGenEnabled !== false,
                 enableAudioGen: data.enableAudioGen !== false, // Default true if undefined
+                enableBloggerSync: data.enableBloggerSync !== false, // 🆕 Admin toggle for Blogger
                 articleStatus: botMode === 'manual' ? 'draft' : 'published',
                 enableAI: true // Assumed true as no UI toggle exists yet
             };
@@ -188,6 +202,7 @@ async function getBotSettings() {
         isBotActive: true,
         enableImageGen: true,
         enableAudioGen: true,
+        enableBloggerSync: true, // 🆕 Default: Blogger ON
         articleStatus: 'published',
         enableAI: true
     };

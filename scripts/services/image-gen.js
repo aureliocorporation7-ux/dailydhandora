@@ -10,6 +10,11 @@ const { HfInference } = require('@huggingface/inference');
 
 const IMGBB_KEY = process.env.IMGBB;
 
+// 🛡️ Startup validation
+if (!IMGBB_KEY) {
+    console.warn('⚠️ [ImgBB] WARNING: IMGBB env variable is missing! Image uploads will fail.');
+}
+
 /**
  * 🎨 Generates an image using HuggingFace Flux and uploads to ImgBB.
  * @param {string} prompt - The image generation prompt.
@@ -74,11 +79,21 @@ async function generateImage(prompt) {
  * @returns {Promise<string|null>} - The URL of the uploaded image.
  */
 async function uploadToImgBB(buffer) {
+    if (!IMGBB_KEY) {
+        console.error("     ❌ [ImgBB] Upload skipped: IMGBB API key is missing!");
+        return null;
+    }
     try {
         console.log("     📤 [ImgBB] Uploading...");
-        const form = new FormData();
-        form.append('image', buffer.toString('base64'));
-        const res = await axios.post(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, form, { headers: { ...form.getHeaders() } });
+        const params = new URLSearchParams();
+        params.append('key', IMGBB_KEY);
+        params.append('image', buffer.toString('base64'));
+
+        const res = await axios.post('https://api.imgbb.com/1/upload', params.toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity
+        });
 
         if (res.data.success) {
             console.log(`     ✅ [ImgBB] Upload Complete: ${res.data.data.url}`);
@@ -87,7 +102,8 @@ async function uploadToImgBB(buffer) {
             console.error(`     ❌ [ImgBB] Upload Failed: ${JSON.stringify(res.data)}`);
         }
     } catch (e) {
-        console.error(`     ❌ [ImgBB] Error: ${e.message}`);
+        const detail = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+        console.error(`     ❌ [ImgBB] Error: ${detail}`);
     }
     return null;
 }
