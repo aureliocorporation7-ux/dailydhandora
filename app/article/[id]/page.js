@@ -104,7 +104,7 @@ export default async function ArticlePage({ params }) {
   const isPosterMode = POSTER_CATEGORIES.includes(article.category);
 
   // Dynamic base URL
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.onrender.com';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
 
   // 🔍 SEO: Enhanced NewsArticle Schema (Google Rich Results)
   const jsonLd = {
@@ -309,7 +309,7 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.onrender.com';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
 
   return {
     title: `${article.headline} - DailyDhandora`,

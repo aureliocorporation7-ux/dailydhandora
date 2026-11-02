@@ -416,7 +416,7 @@ async function generateMandiCard(rates, date) {
                                     type: 'span',
                                     props: {
                                         style: { fontSize: '24px', color: '#cbd5e1' },
-                                        children: 'DailyDhandora.com - किसानों का साथी'
+                                        children: 'DailyDhandora.in - किसानों का साथी'
                                     }
                                 }
                             }
@@ -541,7 +541,7 @@ async function generateEduCard(headline, date) {
         ctx.fillStyle = '#cbd5e1';
         ctx.font = '20px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('DailyDhandora.com - Education Portal', width / 2, height - 30);
+        ctx.fillText('DailyDhandora.in - Education Portal', width / 2, height - 30);
 
         // 🖼️ Add logo if exists (TOP LEFT on yellow header)
         console.log(`  🖼️ [Canvas] Looking for logo at: ${LOGO_PATH}`);
@@ -702,7 +702,7 @@ async function generateEduCardSatori(headline, date) {
                                     type: 'span',
                                     props: {
                                         style: { fontSize: '24px', color: '#cbd5e1' },
-                                        children: 'DailyDhandora.com - Education Portal'
+                                        children: 'DailyDhandora.in - Education Portal'
                                     }
                                 }
                             }

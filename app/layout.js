@@ -47,7 +47,7 @@ export const viewport = {
 };
 
 // 🔍 SEO: Organization + WebSite Schema (Global)
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.onrender.com';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
 
 const organizationSchema = {
   '@context': 'https://schema.org',

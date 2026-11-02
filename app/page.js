@@ -53,6 +53,7 @@ export default async function Home() {
   return (
     <div className="bg-[#0a0a0a] text-white" suppressHydrationWarning={true}>
       <main className="max-w-7xl mx-auto px-4 py-8">
+        <h1 className="sr-only">DailyDhandora - नागौर और राजस्थान की ताज़ा ख़बरें एवं मंडी भाव</h1>
 
         {/* 🔥 Trending Section */}
         <TrendingSection articles={articles} showViewCounts={settings.showViewCounts} />

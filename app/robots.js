@@ -1,7 +1,7 @@
 export default function robots() {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.RENDER_EXTERNAL_URL ||
-    'https://dailydhandora.onrender.com';
+    'https://dailydhandora.in';
 
   return {
     rules: [

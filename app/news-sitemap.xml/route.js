@@ -17,7 +17,7 @@ export async function GET(request) {
     // Dynamic base URL - works on any domain
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
         process.env.RENDER_EXTERNAL_URL ||
-        'https://dailydhandora.onrender.com';
+        'https://dailydhandora.in';
     const publicationName = 'Daily Dhandora';
     const language = 'hi'; // Hindi
 

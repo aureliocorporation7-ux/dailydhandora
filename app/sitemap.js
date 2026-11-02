@@ -7,7 +7,7 @@ export default async function sitemap() {
   // Dynamic base URL - works on any domain (Render, Vercel, custom)
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.RENDER_EXTERNAL_URL ||
-    'https://dailydhandora.onrender.com';
+    'https://dailydhandora.in';
 
   if (!db) {
     console.error("Sitemap generation failed: Firestore not initialized.");

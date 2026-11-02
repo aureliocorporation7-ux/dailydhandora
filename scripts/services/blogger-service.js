@@ -138,7 +138,7 @@ function formatContentForBlogger(headline, content, imageUrl) {
     html += `\n<hr style="border: 0; border-top: 1px solid #eeeeee; margin: 35px 0;" />
     <p style="text-align: center; font-size: 15px; color: #666666;">
         ताज़ा ख़बरों और विस्तृत जानकारी के लिए हमारे आधिकारिक न्यूज़ पोर्टल 
-        <a href="https://dailydhandora.com" style="color: #FF5A5F; text-decoration: none; font-weight: bold;">DailyDhandora</a> 
+        <a href="https://dailydhandora.in" style="color: #FF5A5F; text-decoration: none; font-weight: bold;">DailyDhandora</a> 
         पर जाएँ।
     </p>`;
 
