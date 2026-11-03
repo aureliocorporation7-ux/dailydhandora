@@ -65,11 +65,16 @@ async function getRelatedArticles(category, currentId) {
       .get();
 
     const articles = snapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      }))
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          headline: data.headline || '',
+          imageUrl: data.imageUrl || '',
+          category: data.category || '',
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        };
+      })
       .filter(a => a.id !== currentId)
       .slice(0, 3);
 

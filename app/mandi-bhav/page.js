@@ -64,8 +64,15 @@ async function getMandiArticles() {
       const data = doc.data();
       return {
         id: doc.id,
-        ...data,
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+        headline: data.headline || 'मंडी भाव अपडेट',
+        imageUrl: data.imageUrl || '',
+        category: data.category || 'मंडी भाव',
+        imageType: data.imageType || 'clean',
+        views: data.views || 0,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
+        publishedAt: data.publishedAt?.toDate ? data.publishedAt.toDate().toISOString() : (data.publishedAt || null),
+        updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt || null),
+        audioGeneratedAt: data.audioGeneratedAt?.toDate ? data.audioGeneratedAt.toDate().toISOString() : (data.audioGeneratedAt || null),
       };
     });
   } catch (error) {
