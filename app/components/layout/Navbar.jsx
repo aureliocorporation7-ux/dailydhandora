@@ -11,7 +11,7 @@ export default function Navbar() {
 
   const menuItems = [
     { name: '🏠 होम', path: '/' },
-    { name: '🌾 मंडी भाव', path: '/mandi-bhav' },
+    { name: '🌾 मंडी भाव', path: '/category/mandi-bhav' },
     { name: '📰 नागौर न्यूज़', path: '/category/nagaur-news' },
     { name: '📚 शिक्षा विभाग', path: '/category/education-dept' },
     { name: '🏛️ सरकारी योजना', path: '/category/schemes' },

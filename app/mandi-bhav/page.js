@@ -200,6 +200,15 @@ export default async function MandiBhavHub() {
               ))}
             </div>
           )}
+
+          <div className="mt-8 text-center">
+            <Link
+              href="/category/mandi-bhav"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-neutral-900 border border-neutral-700 hover:border-primary text-sm font-bold text-white hover:text-primary transition-all shadow-md"
+            >
+              <span>🌾</span> सभी मंडी भाव समाचार देखें →
+            </Link>
+          </div>
         </section>
 
         {/* Local Mandis Info Section (E-E-A-T and Local Relevance) */}
