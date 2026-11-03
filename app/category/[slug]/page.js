@@ -14,6 +14,34 @@ const categoryMapping = {
   'education-dept': 'शिक्षा विभाग'
 };
 
+const categorySeoData = {
+  'nagaur-news': {
+    title: 'नागौर न्यूज़ टुडे - आज की ताज़ा ख़बरें और लाइव अपडेट',
+    description: 'नागौर जिले की हर ताज़ा ख़बर, ब्रेकिंग न्यूज़, स्थानीय घटनाएं, मौसम और विकास कार्य सबसे पहले पढ़ें DailyDhandora पर।',
+    keywords: ['नागौर न्यूज़', 'नागौर समाचार', 'nagaur news today', 'nagaur breaking news', 'nagaur hindi news'],
+  },
+  'mandi-bhav': {
+    title: 'नागौर मंडी भाव - आज के ताज़ा भाव जीरा, इसबगोल, ग्वार, मूंग',
+    description: 'नागौर और मेड़ता कृषि उपज मंडी के आज के ताज़ा भाव। जीरा, ग्वार, मूंग, इसबगोल, सौंफ, चना और सरसों की दैनिक आवक और नीलामी दरें देखें।',
+    keywords: ['नागौर मंडी भाव', 'nagaur mandi bhav', 'merta mandi bhav', 'जीरा भाव आज', 'ग्वार भाव', 'मूंग भाव'],
+  },
+  'schemes': {
+    title: 'राजस्थान सरकारी योजना - नई योजनाएं, पात्रता व आवेदन',
+    description: 'राजस्थान सरकार और केंद्र सरकार की सभी जन कल्याणकारी योजनाओं की ताज़ा जानकारी, पात्रता नियम, ज़रूरी दस्तावेज़ और आवेदन प्रक्रिया हिंदी में।',
+    keywords: ['राजस्थान सरकारी योजना', 'rajasthan sarkari yojana', 'yojana update', 'rajasthan government schemes'],
+  },
+  'education-dept': {
+    title: 'शिक्षा विभाग राजस्थान - शाला दर्पण, ट्रांसफर व आदेश',
+    description: 'राजस्थान शिक्षा विभाग, प्राथमिक व माध्यमिक शिक्षा निदेशालय बीकानेर, शाला दर्पण पोर्टल, शिक्षक तबादले और परीक्षा दिशा-निर्देशों की ताज़ा खबरें।',
+    keywords: ['शिक्षा विभाग राजस्थान', 'shiksha vibhag news', 'shala darpan', 'rajasthan education news'],
+  },
+  'bharti-result': {
+    title: 'भर्ती व रिजल्ट - राजस्थान नई नौकरियां, एडमिट कार्ड व कटऑफ',
+    description: 'RSMSSB, RPSC, REET, पुलिस और अन्य सरकारी भर्तियों के नोटिफिकेशन, परीक्षा तिथि, प्रवेश पत्र, आंसर की और परीक्षा परिणाम की तुरंत जानकारी।',
+    keywords: ['राजस्थान भर्ती', 'rajasthan bharti result', 'sarkari result rajasthan', 'rpsc news', 'rsmssb news'],
+  },
+};
+
 // Reverse mapping for API (slug -> API category key)
 const apiCategoryMap = {
   'schemes': 'schemes',
@@ -78,19 +106,93 @@ export default async function CategoryPage({ params }) {
   const articles = await getCategoryArticles(slug);
   const hindiName = categoryMapping[slug] || slug;
   const hindiCategory = categoryMapping[slug];
+  const seoInfo = categorySeoData[slug] || {
+    title: `${hindiName} समाचार`,
+    description: `${hindiName} से जुड़ी सभी ताज़ा ख़बरें और अपडेट्स DailyDhandora पर पढ़ें।`,
+    keywords: [hindiName, 'DailyDhandora'],
+  };
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+
+  // 🔍 SEO: CollectionPage + BreadcrumbList Schema
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: seoInfo.title,
+    description: seoInfo.description,
+    url: `${baseUrl}/category/${slug}`,
+    inLanguage: 'hi-IN',
+    publisher: {
+      '@type': 'Organization',
+      name: 'DailyDhandora',
+      url: baseUrl,
+      logo: `${baseUrl}/logo-512.webp`,
+    },
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: articles.slice(0, 10).map((art, idx) => ({
+        '@type': 'ListItem',
+        position: idx + 1,
+        url: `${baseUrl}/article/${art.id}`,
+        name: art.headline,
+      })),
+    },
+  };
+
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'होम',
+        item: baseUrl,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: 'श्रेणियां',
+        item: `${baseUrl}/categories`,
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: hindiName,
+        item: `${baseUrl}/category/${slug}`,
+      },
+    ],
+  };
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* 🔍 SEO: Schemas */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
+
       <header className="sticky top-0 z-10 bg-[#0a0a0a]/80 backdrop-blur-sm border-b border-neutral-800 p-4">
         <div className="max-w-7xl mx-auto flex items-center">
           <Link href="/" className="text-neutral-400 hover:text-white mr-4">
-            ← Back
+            ← होम पर जाएं
           </Link>
-          <h1 className="text-2xl font-bold capitalize text-primary">{hindiName} News</h1>
+          <h1 className="text-2xl font-bold text-primary">{hindiName}</h1>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8">
+        {/* Semantic H2 to fix heading level hierarchy (h1 -> h2 -> h3 cards) */}
+        <div className="mb-6">
+          <h2 className="text-lg text-gray-300 font-medium">
+            {seoInfo.description}
+          </h2>
+        </div>
+
         {articles.length === 0 ? (
           <div className="text-center py-20 bg-neutral-900 rounded-lg border border-neutral-800">
             <p className="text-xl text-gray-400">इस श्रेणी में अभी कोई समाचार उपलब्ध नहीं है।</p>
@@ -111,8 +213,36 @@ export default async function CategoryPage({ params }) {
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const hindiName = categoryMapping[slug] || slug;
+  const seoInfo = categorySeoData[slug] || {
+    title: `${hindiName} समाचार`,
+    description: `${hindiName} से जुड़ी सभी ताज़ा ख़बरें और अपडेट्स DailyDhandora पर पढ़ें।`,
+    keywords: [hindiName],
+  };
+
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+
   return {
-    title: `${hindiName} News - DailyDhandora`,
-    description: `Latest news and updates from ${hindiName} category.`,
+    title: `${seoInfo.title} | DailyDhandora`,
+    description: seoInfo.description,
+    keywords: seoInfo.keywords,
+    openGraph: {
+      title: `${seoInfo.title} | DailyDhandora`,
+      description: seoInfo.description,
+      url: `${baseUrl}/category/${slug}`,
+      siteName: 'DailyDhandora',
+      locale: 'hi_IN',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${seoInfo.title} | DailyDhandora`,
+      description: seoInfo.description,
+    },
+    alternates: {
+      canonical: `${baseUrl}/category/${slug}`,
+      languages: {
+        'hi-IN': `${baseUrl}/category/${slug}`,
+      },
+    },
   };
 }

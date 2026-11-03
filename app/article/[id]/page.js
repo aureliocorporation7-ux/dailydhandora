@@ -127,7 +127,8 @@ export default async function ArticlePage({ params }) {
     author: {
       '@type': 'Person',
       name: 'Abhishek',
-      url: `${baseUrl}/about`
+      url: `${baseUrl}/about`,
+      jobTitle: 'Chief Editor'
     },
     publisher: {
       '@type': 'Organization',
@@ -142,7 +143,34 @@ export default async function ArticlePage({ params }) {
     articleSection: article.category,
     keywords: article.tags?.join(', ') || article.category,
     inLanguage: 'hi-IN',
-    isAccessibleForFree: true
+    isAccessibleForFree: true,
+    wordCount: article.content?.replace(/<[^>]*>/g, '').split(/\s+/).length || 0,
+    url: `${baseUrl}/article/${article.id}`
+  };
+
+  // 🔍 SEO: BreadcrumbList Schema (Google SERP breadcrumbs)
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'होम',
+        item: baseUrl
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: article.category || 'समाचार',
+        item: `${baseUrl}/categories`
+      },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: article.headline?.substring(0, 50) || 'लेख'
+      }
+    ]
   };
 
   return (
@@ -151,6 +179,10 @@ export default async function ArticlePage({ params }) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
 
       <article className="max-w-4xl mx-auto px-4 py-12">
@@ -251,13 +283,13 @@ export default async function ArticlePage({ params }) {
           </div>
           <div className="flex-1">
             <p className="text-[10px] text-primary uppercase tracking-widest font-bold mb-1">Written & Verified By</p>
-            <h3 className="text-lg font-bold text-white flex items-center gap-1">
+            <div className="text-lg font-bold text-white flex items-center gap-1">
               Abhishek
               <svg className="w-4 h-4 text-blue-500 fill-current" viewBox="0 0 24 24">
                 <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.818-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.437 2.25c-.415-.165-.866-.25-1.336-.25-2.11 0-3.818 1.79-3.818 4 0 .495.083.965.238 1.4-1.272.65-2.147 2.018-2.147 3.6 0 1.495.782 2.798 1.942 3.486-.02.17-.032.34-.032.514 0 2.21 1.708 4 3.818 4 .47 0 .92-.086 1.335-.25.62 1.334 1.926 2.25 3.437 2.25 1.512 0 2.818-.916 3.437-2.25.415.163.865.248 1.336.248 2.11 0 3.818-1.79 3.818-4 0-.174-.012-.344-.033-.513 1.158-.687 1.943-1.99 1.943-3.484zm-6.616-3.334l-4.334 6.5c-.145.217-.382.334-.625.334-.143 0-.288-.04-.416-.126l-.115-.094-2.415-2.415c-.293-.293-.293-.768 0-1.06s.768-.294 1.06 0l1.77 1.767 3.825-5.74c.23-.345.696-.436 1.04-.207.346.23.44.696.21 1.04z" />
               </svg>
               <span className="bg-blue-500/10 text-blue-400 text-[10px] px-1.5 py-0.5 rounded border border-blue-500/20 ml-2">Chief Editor</span>
-            </h3>
+            </div>
             <p className="text-sm text-gray-400 mt-2 leading-relaxed">
               नागौर के युवा पत्रकार और डिजिटल मीडिया विशेषज्ञ। अभिषेक जी को ग्रामीण विकास और स्थानीय समस्याओं के सटीक विश्लेषण का गहरा अनुभव है।
             </p>
@@ -266,9 +298,9 @@ export default async function ArticlePage({ params }) {
 
         {relatedArticles.length > 0 && (
           <div className="mt-16 pt-10 border-t border-neutral-800">
-            <h3 className="text-2xl font-bold text-white mb-6 border-l-4 border-primary pl-3">
+            <h2 className="text-2xl font-bold text-white mb-6 border-l-4 border-primary pl-3">
               संबंधित समाचार (Related News)
-            </h3>
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {relatedArticles.map((rel) => (
                 <Link key={rel.id} href={`/article/${rel.id}`} className="group block bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden hover:border-primary transition-all">
@@ -281,9 +313,9 @@ export default async function ArticlePage({ params }) {
                     />
                   </div>
                   <div className="p-4">
-                    <h4 className="text-sm font-bold text-white line-clamp-2 group-hover:text-primary transition-colors">
+                    <h3 className="text-sm font-bold text-white line-clamp-2 group-hover:text-primary transition-colors">
                       {rel.headline}
-                    </h4>
+                    </h3>
                     <p className="text-xs text-gray-500 mt-2">
                       {new Date(rel.createdAt).toLocaleDateString('hi-IN')}
                     </p>
@@ -311,12 +343,29 @@ export async function generateMetadata({ params }) {
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
 
+  // 🔍 SEO: Smart title truncation — keep under 60 chars for Google SERP
+  const suffix = ' | DailyDhandora';
+  const maxHeadlineLen = 60 - suffix.length;
+  const truncatedHeadline = article.headline?.length > maxHeadlineLen
+    ? article.headline.substring(0, maxHeadlineLen - 1) + '…'
+    : article.headline;
+  const seoTitle = `${truncatedHeadline}${suffix}`;
+
+  // 🔍 SEO: Ensure meta description is 70-160 chars
+  let seoDescription = article.summary || article.headline || '';
+  if (seoDescription.length < 70) {
+    seoDescription = `${seoDescription} — पूरी खबर DailyDhandora पर पढ़ें। नागौर और राजस्थान की ताज़ा ख़बरें।`;
+  }
+  if (seoDescription.length > 160) {
+    seoDescription = seoDescription.substring(0, 157) + '…';
+  }
+
   return {
-    title: `${article.headline} - DailyDhandora`,
-    description: article.summary || article.headline?.substring(0, 160),
+    title: seoTitle,
+    description: seoDescription,
     openGraph: {
       title: article.headline,
-      description: article.summary || article.headline?.substring(0, 160),
+      description: seoDescription,
       url: `${baseUrl}/article/${article.id}`,
       siteName: 'DailyDhandora',
       images: [
@@ -337,11 +386,14 @@ export async function generateMetadata({ params }) {
     twitter: {
       card: 'summary_large_image',
       title: article.headline,
-      description: article.summary || article.headline?.substring(0, 160),
+      description: seoDescription,
       images: [article.imageUrl],
     },
     alternates: {
       canonical: `${baseUrl}/article/${article.id}`,
+      languages: {
+        'hi-IN': `${baseUrl}/article/${article.id}`,
+      },
     },
   };
 }

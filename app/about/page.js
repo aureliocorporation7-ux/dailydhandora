@@ -1,13 +1,43 @@
 import Link from 'next/link';
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+
 export const metadata = {
-  title: 'About Us - DailyDhandora',
-  description: 'नागौर और राजस्थान का अपना भरोसेमंद न्यूज़ पोर्टल। जानिए हमारी टीम और मिशन के बारे में।',
+  title: 'हमारे बारे में (About Us) | DailyDhandora - नागौर का डिजिटल पोर्टल',
+  description: 'नागौर और राजस्थान का अपना भरोसेमंद न्यूज़ पोर्टल। जानिए हमारी संपादकीय टीम, संस्थापक अभिषेक, और निष्पक्ष पत्रकारिता के मिशन के बारे में।',
+  alternates: {
+    canonical: `${baseUrl}/about`,
+    languages: {
+      'hi-IN': `${baseUrl}/about`,
+    },
+  },
 };
 
 export default function About() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    name: 'हमारे बारे में - DailyDhandora',
+    description: 'नागौर और राजस्थान का अपना भरोसेमंद न्यूज़ पोर्टल।',
+    url: `${baseUrl}/about`,
+    mainEntity: {
+      '@type': 'NewsMediaOrganization',
+      name: 'DailyDhandora',
+      url: baseUrl,
+      founder: {
+        '@type': 'Person',
+        name: 'Abhishek',
+        jobTitle: 'Chief Editor & Founder',
+      },
+    },
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white py-12 px-4">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
             <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">

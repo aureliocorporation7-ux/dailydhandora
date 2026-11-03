@@ -18,7 +18,7 @@ export async function GET(request) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
         process.env.RENDER_EXTERNAL_URL ||
         'https://dailydhandora.in';
-    const publicationName = 'Daily Dhandora';
+    const publicationName = 'DailyDhandora';
     const language = 'hi'; // Hindi
 
     // Calculate 48 hours ago

@@ -10,11 +10,18 @@ import DataTracker from './components/DataTracker';
 
 const inter = Inter({ subsets: ['latin'] });
 
+// 🔍 SEO: Base URL
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+
 export const metadata = {
-  title: 'DailyDhandora - ताज़ा खबरें हिंदी में',
-  description: 'नागौर और राजस्थान की सबसे तेज़ हिंदी समाचार वेबसाइट। मंडी भाव, शिक्षा विभाग, सरकारी योजना, भर्ती रिजल्ट की ताज़ा खबरें।',
+  metadataBase: new URL(baseUrl),
+  title: {
+    default: 'DailyDhandora - नागौर की ताज़ा ख़बरें, मंडी भाव, सरकारी योजना',
+    template: '%s | DailyDhandora',
+  },
+  description: 'नागौर और राजस्थान की सबसे तेज़ हिंदी समाचार वेबसाइट। ताज़ा मंडी भाव, शिक्षा विभाग, सरकारी योजना, भर्ती रिजल्ट — सब एक जगह।',
   manifest: '/manifest.json',
-  keywords: ['नागौर न्यूज़', 'मंडी भाव', 'राजस्थान समाचार', 'शिक्षा विभाग', 'सरकारी योजना', 'भर्ती रिजल्ट', 'Nagaur News', 'Rajasthan News'],
+  keywords: ['नागौर न्यूज़', 'नागौर समाचार', 'नागौर मंडी भाव', 'nagaur news today', 'nagaur mandi bhav', 'राजस्थान समाचार', 'शिक्षा विभाग', 'सरकारी योजना', 'भर्ती रिजल्ट', 'Nagaur News', 'Rajasthan News Hindi', 'DailyDhandora'],
   icons: {
     icon: '/favicon.ico',
     apple: '/icon-192x192.png',
@@ -25,16 +32,45 @@ export const metadata = {
     title: 'DailyDhandora',
   },
   openGraph: {
-    title: 'DailyDhandora - ताज़ा खबरें हिंदी में',
-    description: 'नागौर और राजस्थान की सबसे तेज़ हिंदी समाचार वेबसाइट',
+    title: 'DailyDhandora - नागौर की ताज़ा ख़बरें, मंडी भाव, सरकारी योजना',
+    description: 'नागौर और राजस्थान की सबसे तेज़ हिंदी समाचार वेबसाइट। ताज़ा मंडी भाव, शिक्षा विभाग, सरकारी योजना, भर्ती रिजल्ट।',
     type: 'website',
     locale: 'hi_IN',
     siteName: 'DailyDhandora',
+    url: baseUrl,
+    images: [{
+      url: `${baseUrl}/logo-512.webp`,
+      width: 512,
+      height: 512,
+      alt: 'DailyDhandora Logo',
+    }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'DailyDhandora',
+    title: 'DailyDhandora - नागौर की ताज़ा ख़बरें',
     description: 'नागौर और राजस्थान की सबसे तेज़ हिंदी समाचार वेबसाइट',
+    images: [`${baseUrl}/logo-512.webp`],
+  },
+  alternates: {
+    canonical: baseUrl,
+    languages: {
+      'hi-IN': baseUrl,
+    },
+  },
+  verification: {
+    // TODO: Add Google Search Console verification code here
+    // google: 'your-google-site-verification-code',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
 };
 
@@ -42,12 +78,9 @@ export const viewport = {
   themeColor: '#ff9900',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 // 🔍 SEO: Organization + WebSite Schema (Global)
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
 
 const organizationSchema = {
   '@context': 'https://schema.org',

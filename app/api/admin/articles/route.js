@@ -56,7 +56,7 @@ export async function POST(request) {
       publishedAt: status === 'published' ? new Date() : null,
       author: 'Admin (Manual)', // Mark as manually created
       views: 0,
-      sourceUrl: 'https://dailydhandora.com' // Internal source
+      sourceUrl: 'https://dailydhandora.in' // Internal source
     };
 
     const docRef = await db.collection('articles').add(newArticle);

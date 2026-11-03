@@ -27,7 +27,7 @@ export default function Footer() {
           <h3 className="text-white font-bold mb-4 uppercase text-sm tracking-wider">Explore</h3>
           <ul className="space-y-2 text-sm">
             <li><Link href="/" className="hover:text-white transition-colors">🏠 होम</Link></li>
-            <li><Link href="/category/mandi-bhav" className="hover:text-white transition-colors">🌾 मंडी भाव</Link></li>
+            <li><Link href="/mandi-bhav" className="hover:text-white transition-colors">🌾 नागौर मंडी भाव</Link></li>
             <li><Link href="/category/nagaur-news" className="hover:text-white transition-colors">📰 नागौर न्यूज़</Link></li>
             <li><Link href="/category/education-dept" className="hover:text-white transition-colors">📚 शिक्षा विभाग</Link></li>
             <li><Link href="/category/schemes" className="hover:text-white transition-colors">🏛️ सरकारी योजना</Link></li>
@@ -35,10 +35,12 @@ export default function Footer() {
           </ul>
         </div>
 
-        {/* Column 3: Legal */}
+        {/* Column 3: Legal & Trust */}
         <div>
-          <h3 className="text-white font-bold mb-4 uppercase text-sm tracking-wider">Legal</h3>
+          <h3 className="text-white font-bold mb-4 uppercase text-sm tracking-wider">Company & Legal</h3>
           <ul className="space-y-2 text-sm">
+            <li><Link href="/about" className="hover:text-white transition-colors">हमारे बारे में (About Us)</Link></li>
+            <li><Link href="/contact" className="hover:text-white transition-colors">संपर्क करें (Contact)</Link></li>
             <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
             <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Use</Link></li>
             <li><Link href="/grievance" className="hover:text-white transition-colors">Grievance Redressal</Link></li>

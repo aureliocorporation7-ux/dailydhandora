@@ -10,6 +10,12 @@ export default function robots() {
         allow: '/',
         disallow: ['/api/', '/admin/'],
       },
+      // 🤖 AI Mode & Search Crawlers (Google AI, OpenAI, Perplexity)
+      {
+        userAgent: ['Googlebot', 'Googlebot-News', 'Google-Extended', 'GPTBot', 'PerplexityBot', 'Bingbot'],
+        allow: '/',
+        disallow: ['/api/', '/admin/'],
+      },
     ],
     sitemap: [
       `${baseUrl}/sitemap.xml`,

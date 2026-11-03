@@ -72,9 +72,13 @@ async function getRelatedArticles(currentSlug) {
 export async function generateMetadata({ params }) {
   const article = await getArticle(params.slug);
   if (!article) return { title: 'Not Found' };
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
   return {
-    title: article.title,
+    title: `${article.title} | DailyDhandora`,
     description: article.summary,
+    alternates: {
+      canonical: `${baseUrl}/blog/${article.slug}`,
+    },
   };
 }
 
@@ -91,7 +95,8 @@ export default async function BlogPost({ params }) {
   const article = await getArticle(params.slug);
   if (!article) notFound();
   const relatedArticles = await getRelatedArticles(params.slug);
-  const shareUrl = encodeURIComponent(`https://dailydhandora.vercel.app/blog/${article.slug}`);
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+  const shareUrl = encodeURIComponent(`${baseUrl}/blog/${article.slug}`);
   const shareText = encodeURIComponent(article.title);
   const whatsappUrl = `https://wa.me/?text=${shareText}%20${shareUrl}`;
 
@@ -101,13 +106,13 @@ export default async function BlogPost({ params }) {
     '@type': 'NewsArticle',
     headline: article.title,
     // Use article.image or default to logo if not present
-    image: article.image ? [article.image] : ['https://dailydhandora.in/logo-512.webp'],
+    image: article.image ? [article.image] : [`${baseUrl}/logo-512.webp`],
     datePublished: article.createdAt,
     dateModified: article.createdAt, // Or updatedAt if available
     author: [{
         '@type': 'Organization',
         name: 'DailyDhandora Team',
-        url: 'https://dailydhandora.vercel.app'
+        url: baseUrl
     }]
   };
 

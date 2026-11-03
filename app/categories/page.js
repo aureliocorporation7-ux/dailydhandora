@@ -4,6 +4,19 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+
+export const metadata = {
+  title: 'समाचार श्रेणियां (Categories) | DailyDhandora',
+  description: 'DailyDhandora पर सभी प्रमुख समाचार श्रेणियां — नागौर न्यूज़, मंडी भाव, शिक्षा विभाग, सरकारी योजना, और भर्ती रिजल्ट।',
+  alternates: {
+    canonical: `${baseUrl}/categories`,
+    languages: {
+      'hi-IN': `${baseUrl}/categories`,
+    },
+  },
+};
+
 export default function CategoriesPage() {
   const categories = [
     { name: 'मंडी भाव', icon: '🌾', slug: 'mandi-bhav' },

@@ -1,6 +1,11 @@
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+
 export const metadata = {
   title: 'Privacy Policy - DailyDhandora',
-  description: 'Privacy Policy and Data Protection guidelines.',
+  description: 'Privacy Policy and Data Protection guidelines for DailyDhandora.',
+  alternates: {
+    canonical: `${baseUrl}/privacy`,
+  },
 };
 
 export default function Privacy() {
@@ -11,7 +16,7 @@ export default function Privacy() {
         <p className="text-gray-400">Last Updated: December 2025</p>
 
         <p>
-          At DailyDhandora, accessible from dailydhandora.com, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by DailyDhandora and how we use it.
+          At DailyDhandora, accessible from dailydhandora.in, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by DailyDhandora and how we use it.
         </p>
 
         <h3>Log Files</h3>

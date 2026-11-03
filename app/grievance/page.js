@@ -1,6 +1,11 @@
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+
 export const metadata = {
   title: 'Grievance Redressal - DailyDhandora',
   description: 'Grievance Redressal mechanism in accordance with the IT Rules 2021.',
+  alternates: {
+    canonical: `${baseUrl}/grievance`,
+  },
 };
 
 export default function Grievance() {

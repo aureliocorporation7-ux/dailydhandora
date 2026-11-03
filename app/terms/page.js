@@ -1,6 +1,11 @@
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://dailydhandora.in';
+
 export const metadata = {
   title: 'Terms of Use - DailyDhandora',
   description: 'Terms and Conditions for using DailyDhandora.',
+  alternates: {
+    canonical: `${baseUrl}/terms`,
+  },
 };
 
 export default function Terms() {
